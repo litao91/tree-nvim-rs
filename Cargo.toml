@@ -1,0 +1,16 @@
+[package]
+name = "tree-nvim-rs"
+version = "0.1.0"
+authors = ["LI Tao <litao.91@bytedance.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nvim-rs = "0.1.0"
+tokio = { version = "0.2.3", features = ["sync", "rt-core", "macros", "io-util", "tcp", "uds", "process", "io-std", "dns", "rt-threaded", "io-driver", "fs"] }
+async-trait = "0.1.18"
+simplelog = "0.7.4"
+log = "0.3.7"
+fork = "0.1.10"
+
