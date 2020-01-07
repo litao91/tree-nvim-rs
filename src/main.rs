@@ -84,6 +84,7 @@ async fn run(args: Vec<String>) {
     let (nvim, io_handler) = create::new_unix_socket(server, TreeHandler {})
         .await
         .unwrap();
+    nvim.set_var("tree#_channel_id", Value::from(100)).await.unwrap();
 
     match io_handler.await {
         Err(joinerr) => error!("Error joining IO loop '{}'", joinerr),
