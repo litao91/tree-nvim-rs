@@ -1,13 +1,11 @@
+mod column;
 mod tree;
 use async_trait::async_trait;
 use fork::{daemon, Fork};
 use log::*;
-use nvim_rs::{
-    create, neovim_api, neovim_api_manual,
-    runtime::{ChildStdin, Command, Stdout},
-    Handler, Neovim, Value,
-};
-use simplelog::{Config, ConfigBuilder, Level, LevelFilter, WriteLogger};
+use nvim_rs::{create, runtime::Command, Handler, Neovim, Value};
+use simplelog::{ConfigBuilder, LevelFilter, WriteLogger};
+use std::convert::Into;
 use std::env;
 use std::error::Error;
 use tokio::net::UnixStream;
@@ -24,13 +22,37 @@ impl Handler for TreeHandler {
         _neovim: Neovim<Self::Writer>,
     ) -> Result<Value, Value> {
         info!("Request: {}", name);
-        for arg in args {
-            info!("{}", arg);
+        let v1 = match &args[0] {
+            Value::Array(v) => v,
+            _ => return Err(Value::from("Error: invalid arg type"))
+        };
+        let method_args = match &v1[0] {
+            Value::Array(v) => v,
+            _ => return Err(Value::from("Error: invalid arg type"))
+        };
+        let context = match &v1[0] {
+            Value::Map(v) => v,
+            _ => return Err(Value::from("Error: invalid arg type"))
+        };
+
+        match name.as_ref() {
+            "_tree_start" => {
+                if args.len() <= 0 {
+                    return Err(Value::from("Error: path is required for _tree_start"));
+                }
+
+                let path = match &method_args[0] {
+                    Value::String(s) => s,
+                    _ => return Err(Value::from("Error: path should be string")),
+                };
+                info!("Tree start at path: {}!", path);
+                Ok(Value::Nil)
+            }
+            _ => Err(Value::from(format!("Unknown method: {}", name))),
         }
-        Ok(Value::Nil)
     }
 
-    async fn handle_notify(&self, name: String, args: Vec<Value>, neovim: Neovim<Self::Writer>) {
+    async fn handle_notify(&self, name: String, args: Vec<Value>, _neovim: Neovim<Self::Writer>) {
         info!("Notify: {}", name);
         for arg in args {
             info!("{}", arg);
@@ -77,6 +99,67 @@ fn init_logging() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+async fn init_channel<T>(nvim: &Neovim<T>)
+where
+    T: Sync + Send + Unpin + tokio::io::AsyncWrite,
+{
+    let chan = nvim.get_api_info().await.unwrap()[0].as_i64().unwrap();
+    nvim.set_var("tree#_channel_id", Value::from(chan))
+        .await
+        .unwrap();
+    info!("Set chan to {} done!", chan);
+    // file
+    let name = format!("tree_{}_0", Into::<u8>::into(column::Column::FILENAME));
+    let cmd = format!(
+        "hi {} guifg={}",
+        &name,
+        column::GUI_COLORS[Into::<usize>::into(column::GuiColor::YELLOW)]
+    );
+    nvim.command(&cmd).await.unwrap();
+    // dir
+    let name = format!("tree_{}_1", Into::<u8>::into(column::Column::FILENAME));
+    let cmd = format!(
+        "hi {} guifg={}",
+        &name,
+        column::GUI_COLORS[Into::<usize>::into(column::GuiColor::BLUE)]
+    );
+    nvim.command(&cmd).await.unwrap();
+
+    let name = format!("tree_{}", Into::<u8>::into(column::Column::SIZE));
+    let cmd = format!(
+        "hi {} guifg={}",
+        &name,
+        column::GUI_COLORS[Into::<usize>::into(column::GuiColor::GREEN)]
+    );
+    nvim.command(&cmd).await.unwrap();
+
+    let name = format!("tree_{}", Into::<u8>::into(column::Column::TIME));
+    let cmd = format!(
+        "hi {} guifg={}",
+        &name,
+        column::GUI_COLORS[Into::<usize>::into(column::GuiColor::BLUE)]
+    );
+    nvim.command(&cmd).await.unwrap();
+
+    for i in 0..column::ICONS.len() {
+        let name = format!("tree_{}_{}", Into::<u8>::into(column::Column::ICON), i);
+        let cmd = format!("hi {} guifg={}", name, column::ICONS[i][1]);
+        nvim.command(&cmd).await.unwrap();
+    }
+
+    for i in 0..column::GUI_COLORS.len() {
+        let name = format!("tree_{}_{}", Into::<u8>::into(column::Column::MARK), i);
+        let cmd = format!("hi {} guifg={}", &name, column::GUI_COLORS[i]);
+        nvim.command(&cmd).await.unwrap();
+    }
+
+    for i in 0..column::GIT_INDICATORS.len() {
+        let name = format!("tree_{}_{}", Into::<u8>::into(column::Column::GIT), i);
+        let cmd = format!("hi {} guifg={}", &name, column::GIT_INDICATORS[i][1]);
+        nvim.command(&cmd).await.unwrap();
+    }
+}
+
 async fn run(args: Vec<String>) {
     assert_eq!(args[1], "--server");
     debug!("args: {:?}", args);
@@ -84,11 +167,7 @@ async fn run(args: Vec<String>) {
     let (nvim, io_handler) = create::new_unix_socket(server, TreeHandler {})
         .await
         .unwrap();
-    let chan = nvim.get_api_info().await.unwrap()[0].as_i64().unwrap();
-    nvim.set_var("tree#_channel_id", Value::from(chan))
-        .await
-        .unwrap();
-    info!("Set chan to {} done!", chan);
+    init_channel(&nvim).await;
     match io_handler.await {
         Err(joinerr) => error!("Error joining IO loop '{}'", joinerr),
         Ok(Err(err)) => {
