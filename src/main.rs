@@ -85,8 +85,10 @@ async fn run(args: Vec<String>) {
         .await
         .unwrap();
     let chan = nvim.get_api_info().await.unwrap()[0].as_i64().unwrap();
-    info!("chan: {}", chan);
-    // nvim.set_var("tree#_channel_id", Value::from(chan)).await.unwrap();
+    nvim.set_var("tree#_channel_id", Value::from(chan))
+        .await
+        .unwrap();
+    info!("Set chan to {} done!", chan);
     match io_handler.await {
         Err(joinerr) => error!("Error joining IO loop '{}'", joinerr),
         Ok(Err(err)) => {

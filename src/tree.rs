@@ -1,2 +1,1 @@
-pub struct Tree {
-}
+pub struct Tree {}
