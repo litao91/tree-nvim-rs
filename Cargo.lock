@@ -350,15 +350,13 @@ dependencies = [
 
 [[package]]
 name = "nvim-rs"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+version = "0.1.1-alpha.0"
 dependencies = [
  "async-trait 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rmp 0.8.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "rmpv 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "unix_socket 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -577,7 +575,7 @@ dependencies = [
  "async-trait 0.1.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "fork 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "nvim-rs 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nvim-rs 0.1.1-alpha.0",
  "simplelog 0.7.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -586,15 +584,6 @@ dependencies = [
 name = "unicode-xid"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "unix_socket"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "cfg-if 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)",
-]
 
 [[package]]
 name = "winapi"
@@ -679,7 +668,6 @@ dependencies = [
 "checksum num-integer 0.1.41 (registry+https://github.com/rust-lang/crates.io-index)" = "b85e541ef8255f6cf42bbfe4ef361305c6c135d10919ecc26126c4e5ae94bc09"
 "checksum num-traits 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)" = "d4c81ffc11c212fa327657cb19dd85eb7419e163b5b076bede2bdb5c974c07e4"
 "checksum num_cpus 1.11.1 (registry+https://github.com/rust-lang/crates.io-index)" = "76dac5ed2a876980778b8b85f75a71b6cbf0db0b1232ee12f826bccb00d09d72"
-"checksum nvim-rs 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "24f920d183863ab5de29bf953921b286dc5d214620f385e1bfed82a2b0ec6f44"
 "checksum pin-project-lite 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "e8822eb8bb72452f038ebf6048efa02c3fe22bf83f76519c9583e47fc194a422"
 "checksum proc-macro2 1.0.7 (registry+https://github.com/rust-lang/crates.io-index)" = "0319972dcae462681daf4da1adeeaa066e3ebd29c69be96c6abb1259d2ee2bcc"
 "checksum quote 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "053a8c8bcc71fcce321828dc897a98ab9760bef03a4fc36693c231e5b3216cfe"
@@ -704,7 +692,6 @@ dependencies = [
 "checksum tokio 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)" = "0e1bef565a52394086ecac0a6fa3b8ace4cb3a138ee1d96bd2b93283b56824e3"
 "checksum tokio-macros 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "7de6c21a09bab0ce34614bb1071403ad9996db62715eb61e63be5d82f91342bc"
 "checksum unicode-xid 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "826e7639553986605ec5979c7dd957c7895e93eabed50ab2ffa7f6128a75097c"
-"checksum unix_socket 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6aa2700417c405c38f5e6902d699345241c28c0b7ade4abaad71e35a87eb1564"
 "checksum winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)" = "167dc9d6949a9b857f3451275e911c3f44255842c1f7a76f33c55103a909087a"
 "checksum winapi 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)" = "8093091eeb260906a183e6ae1abdba2ef5ef2257a21801128899c3fc699229c6"
 "checksum winapi-build 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "2d315eee3b34aca4797b2da6b13ed88266e6d612562a0c46390af8299fc699bc"
