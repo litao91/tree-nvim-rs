@@ -1,3 +1,9 @@
+"=============================================================================
+" FILE: init.vim
+" AUTHOR: Shougo Matsushita <Shougo.Matsu at gmail.com>
+" License: MIT license
+"=============================================================================
+
 let s:project_root = fnamemodify(expand('<sfile>'), ':h:h:h')
 
 function! tree#init#_initialize() abort
@@ -21,18 +27,25 @@ function! tree#init#_channel() abort
 
   " TODO: temporary, ~ cant work
   if has('unix') && !has('macunix') && !has('win32unix')
-    call jobstart([s:project_root . '/bin/tree-nvim', '--server', v:servername])
+    let cmds = [s:project_root . '/bin/tree-nvim', '--server', v:servername, '--nofork']
   elseif tree#util#is_windows()
-    echom s:project_root . '\bin\tree-nvim.exe'
-    call jobstart([s:project_root . '\bin\tree-nvim.exe', '--server', v:servername])
+    let cmds = [s:project_root . '\bin\tree-nvim.exe', '--server', v:servername]
   else
-    call jobstart([s:project_root . '/bin/tree-nvim.app/Contents/MacOS/tree-nvim', '--server', v:servername])
+    let cmds = [s:project_root . '/bin/tree-nvim.app/Contents/MacOS/tree-nvim', '--server', v:servername]
   endif
-  sleep 100m
-  echom 'jobstart success'
+  echom string(cmds)
+  call jobstart(cmds)
+  let N = 15
+  let i = 0
+  while i < N && !exists('g:tree#_channel_id')
+    sleep 10m
+    let i += 1
+  endwhile
+  echom printf('Wait for server %dms', i*10)
   return v:true
   " call tree#util#print_error(v:exception)
   " call tree#util#print_error(v:throwpoint)
+
 endfunction
 function! tree#init#_check_channel() abort
   return exists('g:tree#_channel_id')

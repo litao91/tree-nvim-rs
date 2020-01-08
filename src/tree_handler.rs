@@ -50,6 +50,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
     ) {
         let bufnr = buf.get_value().as_ext().unwrap();
         let bufnr = (bufnr.0, Vec::from(bufnr.1));
+        info!("bufnr: {:?}", bufnr);
         let tree = Tree::new(bufnr.clone(), ns_id);
         data.take_for(|d| {
             d.trees.insert(bufnr.clone(), tree);
