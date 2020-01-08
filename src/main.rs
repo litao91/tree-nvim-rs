@@ -40,7 +40,7 @@ impl Default for TreeHandler {
 }
 
 impl TreeHandler {
-    async fn handle_hl(nvim: Neovim<<Self as Handler>::Writer>) -> i64 {
+    async fn create_namespace(nvim: Neovim<<Self as Handler>::Writer>) -> i64 {
         let ns_id = nvim.create_namespace("tree_icon").await.unwrap();
         info!("namespace_id for tree_icon: {}", ns_id);
         ns_id
@@ -54,7 +54,7 @@ impl TreeHandler {
     ) {
     }
 
-    async fn handle_buf_req(
+    async fn create_buf(
         data: TreeHandlerDataPtr,
         nvim: Neovim<<Self as Handler>::Writer>,
         ns_id: i64,
@@ -72,14 +72,6 @@ impl TreeHandler {
         Self::create_tree(data, nvim, buf, ns_id).await;
     }
 
-    async fn create_new_tree(
-        data: TreeHandlerDataPtr,
-        nvim: Neovim<<Self as Handler>::Writer>,
-        start_path: String,
-    ) {
-        let ns_id = Self::handle_hl(nvim.clone()).await;
-        Self::handle_buf_req(data, nvim.clone(), ns_id).await;
-    }
     async fn start_tree(
         data: TreeHandlerDataPtr,
         nvim: Neovim<<Self as Handler>::Writer>,
@@ -103,7 +95,8 @@ impl TreeHandler {
         });
         if is_new {
             info!("creating new tree");
-            Self::create_new_tree(data, nvim, path).await;
+            let ns_id = Self::create_namespace(nvim.clone()).await;
+            Self::create_buf(data, nvim.clone(), ns_id).await;
         } else {
         }
     }
