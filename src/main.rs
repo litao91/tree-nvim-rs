@@ -5,12 +5,13 @@ use crate::tree::Tree;
 use async_trait::async_trait;
 use fork::{daemon, Fork};
 use log::*;
-use nvim_rs::{create, runtime::Command, Handler, Neovim, Value};
+use nvim_rs::{create, exttypes::Buffer, runtime::Command, Handler, Neovim, Value};
 use simplelog::{ConfigBuilder, LevelFilter, WriteLogger};
 use std::collections::HashMap;
 use std::convert::Into;
 use std::env;
 use std::error::Error;
+use std::sync::Arc;
 use tokio::io::WriteHalf;
 use tokio::net::UnixStream;
 
@@ -18,33 +19,93 @@ use tokio::net::UnixStream;
 struct TreeHandlerData {
     cfg_map: HashMap<String, Value>,
     trees: HashMap<u32, Tree>,
-    treebufs: Vec<u32>, // recently used order
+    treebufs: Vec<Value>, // recently used order
     resource: HashMap<String, Value>,
+    ns_id: i64,
+    // buffer: Option<Buffer<<TreeHandler as Handler>::Writer>>,
+    buf_count: u32,
 }
+type TreeHandlerDataPtr = Arc<singleton::Singleton<TreeHandlerData>>;
 
 struct TreeHandler {
-    data: singleton::Singleton<TreeHandlerData>,
+    data: TreeHandlerDataPtr,
 }
 
 impl Default for TreeHandler {
     fn default() -> Self {
         Self {
-            data: singleton::Singleton::new(TreeHandlerData::default()),
+            data: Arc::new(singleton::Singleton::new(TreeHandlerData::default())),
         }
     }
 }
 
 impl TreeHandler {
-    async fn handle_hl(&self, nvim: Neovim<<Self as Handler>::Writer>) {
+    async fn handle_hl(nvim: Neovim<<Self as Handler>::Writer>) -> i64 {
         let ns_id = nvim.create_namespace("tree_icon").await.unwrap();
-        info!("ns_id {}", ns_id);
-        self.data.take_for(|d| {
-            d.resource.insert("ns_id".to_owned(), Value::from(ns_id));
-        });
+        info!("namespace_id for tree_icon: {}", ns_id);
+        ns_id
     }
 
-    async fn handle_buf_req(&self, nvim: Neovim<<Self as Handler>::Writer>) {
-        let bufnr = nvim.create_buf(false, true).await.unwrap();
+    async fn create_tree(
+        data: TreeHandlerDataPtr,
+        nvim: Neovim<<Self as Handler>::Writer>,
+        buf: Buffer<<TreeHandler as Handler>::Writer>,
+        ns_id: i64,
+    ) {
+    }
+
+    async fn handle_buf_req(
+        data: TreeHandlerDataPtr,
+        nvim: Neovim<<Self as Handler>::Writer>,
+        ns_id: i64,
+    ) {
+        let buf = nvim.create_buf(false, true).await.unwrap();
+        info!("new buf created: {}", buf.get_value());
+        let buf_num = data.take_for(|d| {
+            let buf_num = d.buf_count;
+            // TODO: use atomic?
+            d.buf_count += 1;
+            buf_num
+        });
+        let buf_name = format!("Tree-{}", buf_num);
+        buf.set_name(&buf_name).await.unwrap();
+        Self::create_tree(data, nvim, buf, ns_id).await;
+    }
+
+    async fn create_new_tree(
+        data: TreeHandlerDataPtr,
+        nvim: Neovim<<Self as Handler>::Writer>,
+        start_path: String,
+    ) {
+        let ns_id = Self::handle_hl(nvim.clone()).await;
+        Self::handle_buf_req(data, nvim.clone(), ns_id).await;
+    }
+    async fn start_tree(
+        data: TreeHandlerDataPtr,
+        nvim: Neovim<<Self as Handler>::Writer>,
+        path: String,
+    ) {
+        info!("start_tree");
+        let is_new = data.take_for(|d| {
+            let new_val = match d.cfg_map.get("new") {
+                Some(Value::Boolean(v)) => Some(v),
+                _ => None,
+            };
+            if d.trees.len() < 1 || new_val.is_some() && *new_val.unwrap() {
+                /*
+                d.resource
+                    .insert("start_path".to_owned(), Value::from(path));
+                */
+                true
+            } else {
+                false
+            }
+        });
+        if is_new {
+            info!("creating new tree");
+            Self::create_new_tree(data, nvim, path).await;
+        } else {
+        }
     }
 }
 
@@ -77,6 +138,7 @@ impl Handler for TreeHandler {
                     return Err(Value::from("Error: path is required for _tree_start"));
                 }
                 let mut cfg_map = HashMap::new();
+                info!("context: {:?}", context);
                 for (k, v) in context {
                     let key = match k {
                         Value::String(v) => v.to_string(),
@@ -87,28 +149,14 @@ impl Handler for TreeHandler {
                 self.data.take_for(|d| d.cfg_map = cfg_map);
 
                 let path = match &method_args[0] {
-                    Value::String(s) => s,
+                    Value::String(s) => s.as_str().unwrap().to_owned(),
                     _ => return Err(Value::from("Error: path should be string")),
                 };
-                info!("Tree start at path: {}!", path);
-                let is_new = self.data.take_for(|d| {
-                    let new_val = match d.cfg_map.get("new") {
-                        Some(Value::Boolean(v)) => Some(v),
-                        _ => None,
-                    };
-                    if new_val.is_some() && *new_val.unwrap() {
-                        d.resource
-                            .insert("start_path".to_owned(), Value::from(path.as_str().unwrap()));
-                        true
-                    } else {
-                        false
-                    }
+                let data = self.data.clone();
+                tokio::spawn(async move {
+                    Self::start_tree(data, nvim, path).await;
                 });
-                if is_new {
-                    let _ = self.handle_hl(nvim.clone());
-                    let _ = self.handle_buf_req(nvim.clone());
-                } else {
-                }
+
                 Ok(Value::Nil)
             }
             _ => Err(Value::from(format!("Unknown method: {}", name))),
