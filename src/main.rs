@@ -121,9 +121,10 @@ async fn run(args: Vec<String>) {
     assert_eq!(args[1], "--server");
     debug!("args: {:?}", args);
     let server = &args[2];
-    let (nvim, io_handler) = create::new_unix_socket(server, TreeHandler::<WriteHalf<UnixStream>>::default())
-        .await
-        .unwrap();
+    let (nvim, io_handler) =
+        create::new_unix_socket(server, TreeHandler::<WriteHalf<UnixStream>>::default())
+            .await
+            .unwrap();
     init_channel(&nvim).await;
     match io_handler.await {
         Err(joinerr) => error!("Error joining IO loop '{}'", joinerr),

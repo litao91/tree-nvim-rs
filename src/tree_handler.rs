@@ -2,7 +2,7 @@ use crate::singleton;
 use crate::tree::Tree;
 use async_trait::async_trait;
 use log::*;
-use nvim_rs::{exttypes::Buffer, Handler, Neovim, Value, runtime::AsyncWrite};
+use nvim_rs::{exttypes::Buffer, runtime::AsyncWrite, Handler, Neovim, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::WriteHalf;
@@ -20,12 +20,12 @@ pub struct TreeHandlerData {
 }
 type TreeHandlerDataPtr = Arc<singleton::Singleton<TreeHandlerData>>;
 
-pub struct TreeHandler <W : AsyncWrite + Send + Sync + Unpin + 'static> {
+pub struct TreeHandler<W: AsyncWrite + Send + Sync + Unpin + 'static> {
     _phantom: Option<W>, // ugly, but otherwise the compiler will complain, need to workout a more elegant way
     data: TreeHandlerDataPtr,
 }
 
-impl<W:AsyncWrite + Send + Sync + Unpin + 'static>  Default for TreeHandler<W> {
+impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Default for TreeHandler<W> {
     fn default() -> Self {
         Self {
             data: Arc::new(singleton::Singleton::new(TreeHandlerData::default())),
@@ -34,7 +34,7 @@ impl<W:AsyncWrite + Send + Sync + Unpin + 'static>  Default for TreeHandler<W> {
     }
 }
 
-impl<W:AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
+impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
     async fn create_namespace(nvim: Neovim<<Self as Handler>::Writer>) -> i64 {
         let ns_id = nvim.create_namespace("tree_icon").await.unwrap();
         info!("namespace_id for tree_icon: {}", ns_id);
@@ -98,7 +98,7 @@ impl<W:AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
 }
 
 #[async_trait]
-impl<W:AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
+impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
     type Writer = W;
     async fn handle_request(
         &self,
