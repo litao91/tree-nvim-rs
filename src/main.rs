@@ -1,38 +1,74 @@
 mod column;
+mod singleton;
 mod tree;
+use crate::tree::Tree;
 use async_trait::async_trait;
 use fork::{daemon, Fork};
 use log::*;
 use nvim_rs::{create, runtime::Command, Handler, Neovim, Value};
 use simplelog::{ConfigBuilder, LevelFilter, WriteLogger};
+use std::collections::HashMap;
 use std::convert::Into;
 use std::env;
 use std::error::Error;
+use tokio::io::WriteHalf;
 use tokio::net::UnixStream;
 
-struct TreeHandler {}
+#[derive(Default)]
+struct TreeHandlerData {
+    cfg_map: HashMap<String, Value>,
+    trees: HashMap<u32, Tree>,
+    treebufs: Vec<u32>, // recently used order
+    resource: HashMap<String, Value>,
+}
+
+struct TreeHandler {
+    data: singleton::Singleton<TreeHandlerData>,
+}
+
+impl Default for TreeHandler {
+    fn default() -> Self {
+        Self {
+            data: singleton::Singleton::new(TreeHandlerData::default()),
+        }
+    }
+}
+
+impl TreeHandler {
+    async fn handle_hl(&self, nvim: Neovim<<Self as Handler>::Writer>) {
+        let ns_id = nvim.create_namespace("tree_icon").await.unwrap();
+        info!("ns_id {}", ns_id);
+        self.data.take_for(|d| {
+            d.resource.insert("ns_id".to_owned(), Value::from(ns_id));
+        });
+    }
+
+    async fn handle_buf_req(&self, nvim: Neovim<<Self as Handler>::Writer>) {
+        let bufnr = nvim.create_buf(false, true).await.unwrap();
+    }
+}
 
 #[async_trait]
 impl Handler for TreeHandler {
-    type Writer = UnixStream;
+    type Writer = WriteHalf<UnixStream>;
     async fn handle_request(
         &self,
         name: String,
-        args: Vec<Value>,
-        _neovim: Neovim<Self::Writer>,
+        mut args: Vec<Value>,
+        nvim: Neovim<Self::Writer>,
     ) -> Result<Value, Value> {
         info!("Request: {}", name);
-        let v1 = match &args[0] {
+        let vl = match &mut args[0] {
             Value::Array(v) => v,
-            _ => return Err(Value::from("Error: invalid arg type"))
+            _ => return Err(Value::from("Error: invalid arg type")),
         };
-        let method_args = match &v1[0] {
-            Value::Array(v) => v,
-            _ => return Err(Value::from("Error: invalid arg type"))
+        let context = match vl.pop() {
+            Some(Value::Map(v)) => v,
+            _ => return Err(Value::from("Error: invalid arg type")),
         };
-        let context = match &v1[0] {
-            Value::Map(v) => v,
-            _ => return Err(Value::from("Error: invalid arg type"))
+        let method_args = match vl.pop() {
+            Some(Value::Array(v)) => v,
+            _ => return Err(Value::from("Error: invalid arg type")),
         };
 
         match name.as_ref() {
@@ -40,12 +76,39 @@ impl Handler for TreeHandler {
                 if args.len() <= 0 {
                     return Err(Value::from("Error: path is required for _tree_start"));
                 }
+                let mut cfg_map = HashMap::new();
+                for (k, v) in context {
+                    let key = match k {
+                        Value::String(v) => v.to_string(),
+                        _ => return Err(Value::from(format!("Key should be of type string"))),
+                    };
+                    cfg_map.insert(key, v);
+                }
+                self.data.take_for(|d| d.cfg_map = cfg_map);
 
                 let path = match &method_args[0] {
                     Value::String(s) => s,
                     _ => return Err(Value::from("Error: path should be string")),
                 };
                 info!("Tree start at path: {}!", path);
+                let is_new = self.data.take_for(|d| {
+                    let new_val = match d.cfg_map.get("new") {
+                        Some(Value::Boolean(v)) => Some(v),
+                        _ => None,
+                    };
+                    if new_val.is_some() && *new_val.unwrap() {
+                        d.resource
+                            .insert("start_path".to_owned(), Value::from(path.as_str().unwrap()));
+                        true
+                    } else {
+                        false
+                    }
+                });
+                if is_new {
+                    let _ = self.handle_hl(nvim.clone());
+                    let _ = self.handle_buf_req(nvim.clone());
+                } else {
+                }
                 Ok(Value::Nil)
             }
             _ => Err(Value::from(format!("Unknown method: {}", name))),
@@ -164,7 +227,7 @@ async fn run(args: Vec<String>) {
     assert_eq!(args[1], "--server");
     debug!("args: {:?}", args);
     let server = &args[2];
-    let (nvim, io_handler) = create::new_unix_socket(server, TreeHandler {})
+    let (nvim, io_handler) = create::new_unix_socket(server, TreeHandler::default())
         .await
         .unwrap();
     init_channel(&nvim).await;
