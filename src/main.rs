@@ -57,8 +57,7 @@ impl TreeHandler {
     async fn create_buf(
         data: TreeHandlerDataPtr,
         nvim: Neovim<<Self as Handler>::Writer>,
-        ns_id: i64,
-    ) {
+    ) -> Buffer<<Self as Handler>::Writer> {
         let buf = nvim.create_buf(false, true).await.unwrap();
         info!("new buf created: {}", buf.get_value());
         let buf_num = data.take_for(|d| {
@@ -69,7 +68,7 @@ impl TreeHandler {
         });
         let buf_name = format!("Tree-{}", buf_num);
         buf.set_name(&buf_name).await.unwrap();
-        Self::create_tree(data, nvim, buf, ns_id).await;
+        buf
     }
 
     async fn start_tree(
@@ -96,7 +95,8 @@ impl TreeHandler {
         if is_new {
             info!("creating new tree");
             let ns_id = Self::create_namespace(nvim.clone()).await;
-            Self::create_buf(data, nvim.clone(), ns_id).await;
+            let buf = Self::create_buf(data.clone(), nvim.clone()).await;
+            Self::create_tree(data, nvim, buf, ns_id).await;
         } else {
         }
     }
