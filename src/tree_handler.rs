@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use log::*;
 use nvim_rs::{exttypes::Buffer, runtime::AsyncWrite, Handler, Neovim, Value};
 use std::collections::HashMap;
+use std::collections::LinkedList;
 use std::sync::Arc;
 use tokio::io::WriteHalf;
 use tokio::net::UnixStream;
@@ -11,8 +12,8 @@ use tokio::net::UnixStream;
 #[derive(Default)]
 pub struct TreeHandlerData {
     cfg_map: HashMap<String, Value>,
-    trees: HashMap<u32, Tree>,
-    treebufs: Vec<Value>, // recently used order
+    trees: HashMap<(i8, Vec<u8>), Tree>,
+    treebufs: LinkedList<(i8, Vec<u8>)>, // recently used order
     resource: HashMap<String, Value>,
     ns_id: i64,
     // buffer: Option<Buffer<<TreeHandler as Handler>::Writer>>,
@@ -47,6 +48,13 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         buf: Buffer<<Self as Handler>::Writer>,
         ns_id: i64,
     ) {
+        let bufnr = buf.get_value().as_ext().unwrap();
+        let bufnr = (bufnr.0, Vec::from(bufnr.1));
+        let tree = Tree::new(bufnr.clone(), ns_id);
+        data.take_for(|d| {
+            d.trees.insert(bufnr.clone(), tree);
+            d.treebufs.push_front(bufnr.clone());
+        });
     }
 
     async fn create_buf(
@@ -54,7 +62,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         nvim: Neovim<<Self as Handler>::Writer>,
     ) -> Buffer<<Self as Handler>::Writer> {
         let buf = nvim.create_buf(false, true).await.unwrap();
-        info!("new buf created: {}", buf.get_value());
+        info!("new buf created: {:?}", buf.get_value());
         let buf_num = data.take_for(|d| {
             let buf_num = d.buf_count;
             // TODO: use atomic?
