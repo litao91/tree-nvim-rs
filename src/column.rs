@@ -99,7 +99,7 @@ pub static GIT_INDICATORS: &[&[&'static str]] = &[
     &["?", "#FFFFFF"],   // Unknown
 ];
 
-pub enum Column {
+pub enum ColumnType {
     MARK,
     INDENT,
     GIT,
@@ -109,7 +109,7 @@ pub enum Column {
     TIME,
 }
 
-impl Into<u8> for Column {
+impl Into<u8> for ColumnType {
     fn into(self) -> u8 {
         self as u8
     }

@@ -50,9 +50,11 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         let bufnr = (bufnr.0, Vec::from(bufnr.1));
         info!("bufnr: {:?}", bufnr);
         let tree = Tree::new(bufnr.clone(), ns_id);
-        let mut d = data.write().await;
-        d.trees.insert(bufnr.clone(), tree);
-        d.treebufs.push_front(bufnr.clone());
+        {
+            let mut d = data.write().await;
+            d.trees.insert(bufnr.clone(), tree);
+            d.treebufs.push_front(bufnr.clone());
+        }
     }
 
     async fn create_buf(
