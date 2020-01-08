@@ -12,7 +12,6 @@ use std::sync::Arc;
 use tokio::io::WriteHalf;
 use tokio::net::UnixStream;
 mod column;
-mod singleton;
 mod tree;
 mod tree_handler;
 use tree_handler::TreeHandler;

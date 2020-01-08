@@ -1,13 +1,11 @@
-use crate::singleton;
 use crate::tree::Tree;
+use async_std::sync::RwLock;
 use async_trait::async_trait;
 use log::*;
 use nvim_rs::{exttypes::Buffer, runtime::AsyncWrite, Handler, Neovim, Value};
 use std::collections::HashMap;
 use std::collections::LinkedList;
 use std::sync::Arc;
-use tokio::io::WriteHalf;
-use tokio::net::UnixStream;
 
 #[derive(Default)]
 pub struct TreeHandlerData {
@@ -19,7 +17,7 @@ pub struct TreeHandlerData {
     // buffer: Option<Buffer<<TreeHandler as Handler>::Writer>>,
     buf_count: u32,
 }
-type TreeHandlerDataPtr = Arc<singleton::Singleton<TreeHandlerData>>;
+type TreeHandlerDataPtr = Arc<RwLock<TreeHandlerData>>;
 
 pub struct TreeHandler<W: AsyncWrite + Send + Sync + Unpin + 'static> {
     _phantom: Option<W>, // ugly, but otherwise the compiler will complain, need to workout a more elegant way
@@ -29,7 +27,7 @@ pub struct TreeHandler<W: AsyncWrite + Send + Sync + Unpin + 'static> {
 impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Default for TreeHandler<W> {
     fn default() -> Self {
         Self {
-            data: Arc::new(singleton::Singleton::new(TreeHandlerData::default())),
+            data: Arc::new(RwLock::new(TreeHandlerData::default())),
             _phantom: Default::default(),
         }
     }
@@ -52,10 +50,9 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         let bufnr = (bufnr.0, Vec::from(bufnr.1));
         info!("bufnr: {:?}", bufnr);
         let tree = Tree::new(bufnr.clone(), ns_id);
-        data.take_for(|d| {
-            d.trees.insert(bufnr.clone(), tree);
-            d.treebufs.push_front(bufnr.clone());
-        });
+        let mut d = data.write().await;
+        d.trees.insert(bufnr.clone(), tree);
+        d.treebufs.push_front(bufnr.clone());
     }
 
     async fn create_buf(
@@ -64,12 +61,10 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
     ) -> Buffer<<Self as Handler>::Writer> {
         let buf = nvim.create_buf(false, true).await.unwrap();
         info!("new buf created: {:?}", buf.get_value());
-        let buf_num = data.take_for(|d| {
-            let buf_num = d.buf_count;
-            // TODO: use atomic?
-            d.buf_count += 1;
-            buf_num
-        });
+        let mut d = data.write().await;
+        let buf_num = d.buf_count;
+        // TODO: use atomic?
+        d.buf_count += 1;
         let buf_name = format!("Tree-{}", buf_num);
         buf.set_name(&buf_name).await.unwrap();
         buf
@@ -81,12 +76,14 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         path: String,
     ) {
         info!("start_tree");
-        let is_new = data.take_for(|d| {
+        let is_new;
+        {
+            let d = data.read().await;
             let new_val = match d.cfg_map.get("new") {
                 Some(Value::Boolean(v)) => Some(v),
                 _ => None,
             };
-            if d.trees.len() < 1 || new_val.is_some() && *new_val.unwrap() {
+            is_new = if d.trees.len() < 1 || new_val.is_some() && *new_val.unwrap() {
                 /*
                 d.resource
                     .insert("start_path".to_owned(), Value::from(path));
@@ -94,8 +91,8 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
                 true
             } else {
                 false
-            }
-        });
+            };
+        }
         if is_new {
             info!("creating new tree");
             let ns_id = Self::create_namespace(nvim.clone()).await;
@@ -143,7 +140,10 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                     };
                     cfg_map.insert(key, v);
                 }
-                self.data.take_for(|d| d.cfg_map = cfg_map);
+                {
+                    let mut d = self.data.write().await;
+                    d.cfg_map = cfg_map;
+                }
 
                 let path = match &method_args[0] {
                     Value::String(s) => s.as_str().unwrap().to_owned(),
