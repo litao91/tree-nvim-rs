@@ -209,5 +209,10 @@ impl Tree {
     }
 
     fn insert_root_cell(&mut self, idx: usize) {
+        let ft = &self.fileitems[0];
+        let start = 0;
+        let byte_start = 0;
+        for col in &self.config.columns {
+        }
     }
 }
