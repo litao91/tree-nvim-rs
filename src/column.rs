@@ -1,5 +1,244 @@
 use crate::tree::Tree;
+use std::convert::From;
+use std::ffi::OsStr;
 use std::fs::Metadata;
+#[derive(Eq, PartialEq, Clone)]
+enum Icon {
+    FolderClosed,
+    FolderOpened,
+    FolderSymlink,
+    File,
+    FileSymlink,
+    FileHidden,
+    Excel,
+    Word,
+    Ppt,
+    Stylus,
+    Sass,
+    Html,
+    Xml,
+    Ejs,
+    Css,
+    Webpack,
+    Markdown,
+    Json,
+    Javascript,
+    Javascriptreact,
+    Ruby,
+    Php,
+    Python,
+    Coffee,
+    Mustache,
+    Conf,
+    Image,
+    Ico,
+    Twig,
+    C,
+    H,
+    Haskell,
+    Lua,
+    Java,
+    Terminal,
+    Ml,
+    Diff,
+    Sql,
+    Clojure,
+    Edn,
+    Scala,
+    Go,
+    Dart,
+    Firefox,
+    Vs,
+    Perl,
+    Rss,
+    Fsharp,
+    Rust,
+    Dlang,
+    Erlang,
+    Elixir,
+    Mix,
+    Vim,
+    Ai,
+    Psd,
+    Psb,
+    Typescript,
+    Typescriptreact,
+    Julia,
+    Puppet,
+    Vue,
+    Swift,
+    Gitconfig,
+    Bashrc,
+    Favicon,
+    Docker,
+    Gruntfile,
+    Gulpfile,
+    Dropbox,
+    License,
+    Procfile,
+    Jquery,
+    Angular,
+    Backbone,
+    Requirejs,
+    Materialize,
+    Mootools,
+    Vagrant,
+    Svg,
+    Font,
+    Text,
+    Archive,
+    Unknonwn,
+}
+
+impl Into<usize> for Icon {
+    fn into(self) -> usize {
+        self as usize
+    }
+}
+
+impl From<&str> for Icon {
+    fn from(s: &str) -> Icon {
+        match s {
+            "styl" => Icon::Stylus,
+            "sass" => Icon::Sass,
+            "scss" => Icon::Sass,
+            "htm" => Icon::Html,
+            "html" => Icon::Html,
+            "slim" => Icon::Html,
+            "xml" => Icon::Xml,
+            "xaml" => Icon::Xml,
+            "ejs" => Icon::Ejs,
+            "css" => Icon::Css,
+            "less" => Icon::Css,
+            "md" => Icon::Markdown,
+            "mdx" => Icon::Markdown,
+            "markdown" => Icon::Markdown,
+            "rmd" => Icon::Markdown,
+            "json" => Icon::Json,
+            "js" => Icon::Javascript,
+            "es6" => Icon::Javascript,
+            "jsx" => Icon::Javascriptreact,
+            "rb" => Icon::Ruby,
+            "ru" => Icon::Ruby,
+            "php" => Icon::Php,
+            "py" => Icon::Python,
+            "pyc" => Icon::Python,
+            "pyo" => Icon::Python,
+            "pyd" => Icon::Python,
+            "coffee" => Icon::Coffee,
+            "mustache" => Icon::Mustache,
+            "hbs" => Icon::Mustache,
+            "config" => Icon::Conf,
+            "conf" => Icon::Conf,
+            "ini" => Icon::Conf,
+            "yml" => Icon::Conf,
+            "yaml" => Icon::Conf,
+            "toml" => Icon::Conf,
+            "jpg" => Icon::Image,
+            "jpeg" => Icon::Image,
+            "bmp" => Icon::Image,
+            "png" => Icon::Image,
+            "gif" => Icon::Image,
+            "ico" => Icon::Ico,
+            "twig" => Icon::Twig,
+            "cpp" => Icon::C,
+            "c++" => Icon::C,
+            "cxx" => Icon::C,
+            "cc" => Icon::C,
+            "cp" => Icon::C,
+            "c" => Icon::C,
+            "h" => Icon::H,
+            "hpp" => Icon::H,
+            "hxx" => Icon::H,
+            "hs" => Icon::Haskell,
+            "lhs" => Icon::Haskell,
+            "lua" => Icon::Lua,
+            "java" => Icon::Java,
+            "jar" => Icon::Java,
+            "sh" => Icon::Terminal,
+            "fish" => Icon::Terminal,
+            "bash" => Icon::Terminal,
+            "zsh" => Icon::Terminal,
+            "ksh" => Icon::Terminal,
+            "csh" => Icon::Terminal,
+            "awk" => Icon::Terminal,
+            "ps1" => Icon::Terminal,
+            "bat" => Icon::Terminal,
+            "cmd" => Icon::Terminal,
+            "ml" => Icon::Ml,
+            "mli" => Icon::Ml,
+            "diff" => Icon::Diff,
+            "db" => Icon::Sql,
+            "sql" => Icon::Sql,
+            "dump" => Icon::Sql,
+            "accdb" => Icon::Sql,
+            "clj" => Icon::Clojure,
+            "cljc" => Icon::Clojure,
+            "cljs" => Icon::Clojure,
+            "edn" => Icon::Edn,
+            "scala" => Icon::Scala,
+            "go" => Icon::Go,
+            "dart" => Icon::Dart,
+            "xul" => Icon::Firefox,
+            "sln" => Icon::Vs,
+            "suo" => Icon::Vs,
+            "pl" => Icon::Perl,
+            "pm" => Icon::Perl,
+            "t" => Icon::Perl,
+            "rss" => Icon::Rss,
+            "f#" => Icon::Fsharp,
+            "fsscript" => Icon::Fsharp,
+            "fsx" => Icon::Fsharp,
+            "fs" => Icon::Fsharp,
+            "fsi" => Icon::Fsharp,
+            "rs" => Icon::Rust,
+            "rlib" => Icon::Rust,
+            "d" => Icon::Dlang,
+            "erl" => Icon::Erlang,
+            "hrl" => Icon::Erlang,
+            "ex" => Icon::Elixir,
+            "exs" => Icon::Elixir,
+            "exx" => Icon::Elixir,
+            "leex" => Icon::Elixir,
+            "vim" => Icon::Vim,
+            "ai" => Icon::Ai,
+            "psd" => Icon::Psd,
+            "psb" => Icon::Psd,
+            "ts" => Icon::Typescript,
+            "tsx" => Icon::Javascriptreact,
+            "jl" => Icon::Julia,
+            "pp" => Icon::Puppet,
+            "vue" => Icon::Vue,
+            "swift" => Icon::Swift,
+            "xcplayground" => Icon::Swift,
+            "svg" => Icon::Svg,
+            "otf" => Icon::Font,
+            "ttf" => Icon::Font,
+            "fnt" => Icon::Font,
+            "txt" => Icon::Text,
+            "text" => Icon::Text,
+            "zip" => Icon::Archive,
+            "tar" => Icon::Archive,
+            "gz" => Icon::Archive,
+            "gzip" => Icon::Archive,
+            "rar" => Icon::Archive,
+            "7z" => Icon::Archive,
+            "iso" => Icon::Archive,
+            "doc" => Icon::Word,
+            "docx" => Icon::Word,
+            "docm" => Icon::Word,
+            "csv" => Icon::Excel,
+            "xls" => Icon::Excel,
+            "xlsx" => Icon::Excel,
+            "xlsm" => Icon::Excel,
+            "ppt" => Icon::Ppt,
+            "pptx" => Icon::Ppt,
+            "pptm" => Icon::Ppt,
+            _ => Icon::Unknonwn,
+        }
+    }
+}
+
 pub static GUI_COLORS: &[&'static str] = &[
     "#905532", "#3AFFDB", "#689FB6", "#44788E", "#834F79", "#834F79", "#AE403F", "#F5C06F",
     "#F09F17", "#D4843E", "#F16529", "#CB6F6F", "#EE6E73", "#8FAA54", "#31B53E", "#FFFFFF",
@@ -173,7 +412,7 @@ pub enum GitStatus {
 }
 
 pub struct FileItem {
-    pub path: String,
+    pub path: std::path::PathBuf,
     pub metadata: Metadata,
     pub level: usize,
     pub opened_tree: bool,
@@ -184,7 +423,7 @@ pub struct FileItem {
 }
 
 impl FileItem {
-    pub fn new(path: String, metadata: Metadata) -> Self {
+    pub fn new(path: std::path::PathBuf, metadata: Metadata) -> Self {
         Self {
             path,
             metadata,
@@ -195,6 +434,10 @@ impl FileItem {
             last: false,
         }
     }
+
+    pub fn extension(&self) -> Option<&str> {
+        self.path.extension().and_then(OsStr::to_str)
+    }
 }
 
 pub struct Cell {
@@ -204,12 +447,13 @@ pub struct Cell {
     byte_end: usize,
     // TODO: size is not equal to the column num
     text: Vec<u8>,
-    color: GuiColor,
+    color: usize,
 }
 
 impl Cell {
-    pub fn new(tree: &Tree, fileitem: &FileItem, ty: ColumnType) {
-        let mut text;
+    pub fn new(tree: &Tree, fileitem: &FileItem, ty: ColumnType) -> Self {
+        let mut text = String::new();
+        let mut color: usize = Icon::Unknonwn.into();
         match ty {
             ColumnType::MARK => {
                 if fileitem.metadata.permissions().readonly() {
@@ -263,7 +507,52 @@ impl Cell {
                     text.push_str(top);
                 }
             }
-            _ => {}
+            ColumnType::GIT => {
+                // unimplemented
+            }
+            ColumnType::ICON => {
+                if fileitem.metadata.is_dir() {
+                    text = String::from(" ");
+                    if fileitem.opened_tree {
+                        color = Icon::FolderOpened.into();
+                    } else if fileitem.metadata.file_type().is_symlink() {
+                        color = Icon::FolderSymlink.into();
+                    } else {
+                        color = Icon::FolderClosed.into();
+                    }
+                } else {
+                    let extension_icon = match fileitem.extension() {
+                        Some(extension) => Icon::from(extension),
+                        None => Icon::Unknonwn,
+                    };
+                    if extension_icon != Icon::Unknonwn {
+                        let icon_idx: usize = extension_icon.into();
+                        text = String::from(ICONS[icon_idx][0]);
+                        color = icon_idx;
+                    } else {
+                        text = String::from(" ");
+                        color = Icon::File.into();
+                    }
+                }
+            }
+            ColumnType::FILENAME => {
+                color = GuiColor::YELLOW.into();
+                text = String::from(fileitem.path.file_name().and_then(OsStr::to_str).unwrap());
+                if fileitem.metadata.is_dir() {
+                    text.push('/');
+                    color = GuiColor::BLUE.into();
+                }
+            }
+            ColumnType::SIZE => {}
+            ColumnType::TIME => {}
         };
+        Self {
+            col_start: 0,
+            col_end: 0,
+            byte_start: 0,
+            byte_end: 0,
+            text: text.into_bytes(),
+            color,
+        }
     }
 }

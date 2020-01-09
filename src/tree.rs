@@ -1,11 +1,11 @@
 use crate::column::ColumnType;
+use crate::column::{Cell, FileItem, GitStatus};
 use log::*;
 use nvim_rs::Value;
 use std::collections::HashMap;
 use std::convert::From;
 use std::io;
 use tokio::fs;
-use crate::column::{Cell, FileItem, GitStatus};
 
 pub enum SplitType {
     Vertical,
@@ -138,7 +138,6 @@ impl Config {
     }
 }
 
-
 pub struct Tree {
     pub bufnr: (i8, Vec<u8>), // use bufnr to avoid tedious generic code
     pub icon_ns_id: i64,
@@ -170,8 +169,7 @@ impl Tree {
         let root_path_str = root_path.to_str().unwrap();
         self.expand_store.insert(root_path_str.to_owned(), true);
         let filemeta = fs::metadata(root_path_str).await?;
-        self.fileitems
-            .push(FileItem::new(root_path_str.to_owned(), filemeta));
+        self.fileitems.push(FileItem::new(root_path, filemeta));
         self.insert_root_cell(0);
         Ok(())
     }
