@@ -1,3 +1,5 @@
+use crate::tree::Tree;
+use std::fs::Metadata;
 pub static GUI_COLORS: &[&'static str] = &[
     "#905532", "#3AFFDB", "#689FB6", "#44788E", "#834F79", "#834F79", "#AE403F", "#F5C06F",
     "#F09F17", "#D4843E", "#F16529", "#CB6F6F", "#EE6E73", "#8FAA54", "#31B53E", "#FFFFFF",
@@ -99,6 +101,10 @@ pub static GIT_INDICATORS: &[&[&'static str]] = &[
     &["?", "#FFFFFF"],   // Unknown
 ];
 
+static READ_ONLY_ICON: &'static str = "✗";
+static SELECTED_ICON: &'static str = "✓";
+
+#[derive(PartialEq, Eq)]
 pub enum ColumnType {
     MARK,
     INDENT,
@@ -152,5 +158,112 @@ pub enum GuiColor {
 impl Into<usize> for GuiColor {
     fn into(self) -> usize {
         self as usize
+    }
+}
+
+pub enum GitStatus {
+    Untracked,
+    Modified,
+    Staged,
+    Renamed,
+    Ignored,
+    Unmerged,
+    Deleted,
+    Unknown,
+}
+
+pub struct FileItem {
+    pub path: String,
+    pub metadata: Metadata,
+    pub level: usize,
+    pub opened_tree: bool,
+    pub selected: bool,
+    pub parent: Option<usize>, // the index of the parent in the tree list
+    pub last: bool,
+    // pub git_map: HashMap<String, GitStatus>,
+}
+
+impl FileItem {
+    pub fn new(path: String, metadata: Metadata) -> Self {
+        Self {
+            path,
+            metadata,
+            level: 0,
+            opened_tree: false,
+            selected: false,
+            parent: None,
+            last: false,
+        }
+    }
+}
+
+pub struct Cell {
+    col_start: usize,
+    col_end: usize,
+    byte_start: usize,
+    byte_end: usize,
+    // TODO: size is not equal to the column num
+    text: Vec<u8>,
+    color: GuiColor,
+}
+
+impl Cell {
+    pub fn new(tree: &Tree, fileitem: &FileItem, ty: ColumnType) {
+        let mut text;
+        match ty {
+            ColumnType::MARK => {
+                if fileitem.metadata.permissions().readonly() {
+                    text = String::from(READ_ONLY_ICON);
+                } else {
+                    text = String::from(" ");
+                }
+            }
+            ColumnType::INDENT => {
+                let mut icon_idx: i32 = -1;
+                let mut indent_idx: i32 = -1;
+                for (i, col) in tree.config.columns.iter().enumerate() {
+                    if *col == ColumnType::ICON {
+                        icon_idx = i as i32;
+                    }
+                    if *col == ColumnType::INDENT {
+                        indent_idx = i as i32;
+                    }
+                }
+                let margin = icon_idx - indent_idx - 1;
+                let margin_val = if margin >= 0 { margin as usize } else { 0usize };
+                let prefix = unsafe { String::from_utf8_unchecked(vec![b' '; margin_val * 2]) };
+                let mut inversed_elements: Vec<&str> = Vec::new();
+                if fileitem.level > 0 {
+                    if fileitem.last {
+                        inversed_elements.push("└ ");
+                    } else {
+                        inversed_elements.push("│ ");
+                    }
+                    inversed_elements.push(prefix.as_str());
+                    let max_level = fileitem.level - 1;
+                    let mut i = 0;
+                    let mut pf_idx = fileitem.parent;
+                    while let Some(pf_idx_v) = pf_idx {
+                        if i >= max_level {
+                            break;
+                        }
+                        let pf = &tree.get_fileitem(pf_idx_v);
+                        if pf.last {
+                            inversed_elements.push("  ");
+                        } else {
+                            inversed_elements.push("│ ");
+                        }
+
+                        pf_idx = pf.parent;
+                        i = i + 1;
+                    }
+                }
+                text = String::new();
+                while let Some(top) = inversed_elements.pop() {
+                    text.push_str(top);
+                }
+            }
+            _ => {}
+        };
     }
 }

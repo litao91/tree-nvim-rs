@@ -12,8 +12,6 @@ pub struct TreeHandlerData {
     cfg_map: HashMap<String, Value>,
     trees: HashMap<(i8, Vec<u8>), Tree>,
     treebufs: LinkedList<(i8, Vec<u8>)>, // recently used order
-    resource: HashMap<String, Value>,
-    ns_id: i64,
     // buffer: Option<Buffer<<TreeHandler as Handler>::Writer>>,
     buf_count: u32,
 }
@@ -42,7 +40,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
 
     async fn create_tree(
         data: TreeHandlerDataPtr,
-        nvim: Neovim<<Self as Handler>::Writer>,
+        _nvim: Neovim<<Self as Handler>::Writer>,
         buf: Buffer<<Self as Handler>::Writer>,
         ns_id: i64,
     ) {

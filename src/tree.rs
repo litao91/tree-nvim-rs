@@ -3,9 +3,9 @@ use log::*;
 use nvim_rs::Value;
 use std::collections::HashMap;
 use std::convert::From;
-use std::fs::Metadata;
 use std::io;
 use tokio::fs;
+use crate::column::{Cell, FileItem, GitStatus};
 
 pub enum SplitType {
     Vertical,
@@ -138,41 +138,6 @@ impl Config {
     }
 }
 
-pub enum GitStatus {
-    Untracked,
-    Modified,
-    Staged,
-    Renamed,
-    Ignored,
-    Unmerged,
-    Deleted,
-    Unknown,
-}
-
-pub struct FileItem {
-    pub path: String,
-    pub metadata: Metadata,
-    pub level: usize,
-    pub opened_tree: bool,
-    pub selected: bool,
-    pub parent: Option<usize>, // the index of the parent in the tree list
-    pub last: bool,
-    // pub git_map: HashMap<String, GitStatus>,
-}
-
-impl FileItem {
-    fn new(path: String, metadata: Metadata) -> Self {
-        Self {
-            path,
-            metadata,
-            level: 0,
-            opened_tree: false,
-            selected: false,
-            parent: None,
-            last: false,
-        }
-    }
-}
 
 pub struct Tree {
     pub bufnr: (i8, Vec<u8>), // use bufnr to avoid tedious generic code
@@ -193,6 +158,9 @@ impl Tree {
             git_map: Default::default(),
         }
     }
+    pub fn get_fileitem(&self, idx: usize) -> &FileItem {
+        &self.fileitems[idx]
+    }
     pub async fn change_root(&mut self, path_str: &str) -> io::Result<()> {
         let path = std::path::Path::new(path_str);
         if !path.is_dir() {
@@ -212,7 +180,6 @@ impl Tree {
         let ft = &self.fileitems[0];
         let start = 0;
         let byte_start = 0;
-        for col in &self.config.columns {
-        }
+        for col in &self.config.columns {}
     }
 }
