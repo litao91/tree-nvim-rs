@@ -3,6 +3,9 @@ use log::*;
 use nvim_rs::Value;
 use std::collections::HashMap;
 use std::convert::From;
+use std::fs::Metadata;
+use std::io;
+use tokio::fs;
 
 pub enum SplitType {
     Vertical,
@@ -92,10 +95,18 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn update(&mut self, cfg: HashMap<String, Value>) {
+    pub fn update(&mut self, cfg: &HashMap<String, Value>) {
+        // TODO: handle type mismatch
         for (k, v) in cfg {
             match k.as_str() {
-                "auto_recursive_level" => self.auto_recursive_level = v.as_u64().unwrap() as u16,
+                "auto_recursive_level" => {
+                    if let Some(v) = v.as_u64() {
+                        self.auto_recursive_level = v as u16
+                    } else {
+                        warn!("type mismatch for auto_recursive_level: {}", v)
+                    }
+                }
+
                 "wincol" => self.wincol = v.as_u64().unwrap() as u16,
                 "winheigth" => self.winheight = v.as_u64().unwrap() as u16,
                 "winrow" => self.winrow = v.as_u64().unwrap() as u16,
@@ -118,7 +129,7 @@ impl Config {
                 "columns" => {
                     self.columns.clear();
                     for col in v.as_str().unwrap().split(":") {
-
+                        self.columns.push(ColumnType::from(col));
                     }
                 }
                 _ => error!("Unsupported member: {}", k),
@@ -127,10 +138,49 @@ impl Config {
     }
 }
 
+pub enum GitStatus {
+    Untracked,
+    Modified,
+    Staged,
+    Renamed,
+    Ignored,
+    Unmerged,
+    Deleted,
+    Unknown,
+}
+
+pub struct FileItem {
+    pub path: String,
+    pub metadata: Metadata,
+    pub level: usize,
+    pub opened_tree: bool,
+    pub selected: bool,
+    pub parent: Option<usize>, // the index of the parent in the tree list
+    pub last: bool,
+    // pub git_map: HashMap<String, GitStatus>,
+}
+
+impl FileItem {
+    fn new(path: String, metadata: Metadata) -> Self {
+        Self {
+            path,
+            metadata,
+            level: 0,
+            opened_tree: false,
+            selected: false,
+            parent: None,
+            last: false,
+        }
+    }
+}
+
 pub struct Tree {
-    bufnr: (i8, Vec<u8>), // use bufnr to avoid tedious generic code
-    icon_ns_id: i64,
-    config: Config,
+    pub bufnr: (i8, Vec<u8>), // use bufnr to avoid tedious generic code
+    pub icon_ns_id: i64,
+    pub config: Config,
+    fileitems: Vec<FileItem>,
+    expand_store: HashMap<String, bool>,
+    git_map: HashMap<String, GitStatus>,
 }
 impl Tree {
     pub fn new(bufnr: (i8, Vec<u8>), icon_ns_id: i64) -> Self {
@@ -138,6 +188,26 @@ impl Tree {
             bufnr,
             icon_ns_id,
             config: Default::default(),
+            fileitems: Default::default(),
+            expand_store: Default::default(),
+            git_map: Default::default(),
         }
+    }
+    pub async fn change_root(&mut self, path_str: &str) -> io::Result<()> {
+        let path = std::path::Path::new(path_str);
+        if !path.is_dir() {
+            return Ok(());
+        }
+        let root_path = fs::canonicalize(path).await?;
+        let root_path_str = root_path.to_str().unwrap();
+        self.expand_store.insert(root_path_str.to_owned(), true);
+        let filemeta = fs::metadata(root_path_str).await?;
+        self.fileitems
+            .push(FileItem::new(root_path_str.to_owned(), filemeta));
+        self.insert_root_cell(0);
+        Ok(())
+    }
+
+    fn insert_root_cell(&mut self, idx: usize) {
     }
 }

@@ -115,6 +115,21 @@ impl Into<u8> for ColumnType {
     }
 }
 
+impl From<&str> for ColumnType {
+    fn from(s: &str) -> Self {
+        match s {
+            "mark" => ColumnType::MARK,
+            "ident" => ColumnType::INDENT,
+            "git" => ColumnType::GIT,
+            "icon" => ColumnType::ICON,
+            "filename" => ColumnType::FILENAME,
+            "size" => ColumnType::SIZE,
+            "time" => ColumnType::TIME,
+            _ => panic!("Error! unknown column type"),
+        }
+    }
+}
+
 pub enum GuiColor {
     BROWN,
     AQUA,
