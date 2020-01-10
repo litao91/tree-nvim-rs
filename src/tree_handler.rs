@@ -34,7 +34,9 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Default for TreeHandler<W> {
 }
 
 impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
-    async fn create_namespace(nvim: Neovim<<Self as Handler>::Writer>) -> Result<i64, Box<dyn std::error::Error>> {
+    async fn create_namespace(
+        nvim: Neovim<<Self as Handler>::Writer>,
+    ) -> Result<i64, Box<dyn std::error::Error>> {
         let ns_id = nvim.create_namespace("tree_icon").await?;
         Ok(ns_id)
     }
@@ -76,10 +78,8 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             d.treebufs.push_front(bufnr.clone());
             d.pref_bufnr = Some(bufnr.clone());
         }
-        info!("before!");
         nvim.execute_lua("resume(...)", vec![Value::Ext(bufnr.0, bufnr.1), tree_cfg])
             .await?;
-        info!("New tree created!");
         Ok(())
     }
 

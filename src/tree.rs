@@ -173,7 +173,8 @@ impl Tree {
         buf.set_option("ft", Value::from("tree")).await?;
         buf.set_option("modifiable", Value::from(false)).await?;
         nvim.command("lua require('tree')").await?;
-        nvim.execute_lua("buf_attach(...)", vec![buf.get_value().clone()]).await?;
+        nvim.execute_lua("buf_attach(...)", vec![buf.get_value().clone()])
+            .await?;
         Ok(Self {
             bufnr,
             icon_ns_id,
