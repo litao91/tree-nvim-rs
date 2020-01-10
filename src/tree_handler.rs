@@ -48,7 +48,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let bufnr = buf.get_value().as_ext().unwrap();
         let bufnr = (bufnr.0, Vec::from(bufnr.1));
-        let mut tree = Tree::new(bufnr.clone(), ns_id);
+        let mut tree = Tree::new(bufnr.clone(), &buf, &nvim, ns_id).await?;
         {
             let d = data.read().await;
             tree.config.update(&d.cfg_map);

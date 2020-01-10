@@ -1,7 +1,7 @@
 use crate::column::ColumnType;
 use crate::column::{Cell, FileItem, GitStatus};
 use log::*;
-use nvim_rs::Value;
+use nvim_rs::{exttypes::Buffer, runtime::AsyncWrite, Neovim, Value};
 use std::collections::HashMap;
 use std::convert::From;
 use std::io;
@@ -106,7 +106,7 @@ impl Config {
         // TODO: handle type mismatch
         for (k, v) in cfg {
             let k_str = k.as_str();
-            let k_str = &k_str[1..k.len()-1];
+            let k_str = &k_str[1..k.len() - 1];
             match k_str {
                 "auto_recursive_level" => {
                     if let Some(v) = v.as_u64() {
@@ -158,8 +158,18 @@ pub struct Tree {
     col_map: HashMap<ColumnType, Vec<Cell>>,
 }
 impl Tree {
-    pub fn new(bufnr: (i8, Vec<u8>), icon_ns_id: i64) -> Self {
-        Self {
+    pub async fn new<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        bufnr: (i8, Vec<u8>),
+        buf: &Buffer<W>,
+        nvim: &Neovim<W>,
+        icon_ns_id: i64,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        buf.set_option("ft", Value::from("tree")).await?;
+        buf.set_option("modifiable", Value::from(false)).await?;
+        nvim.command("lua require('tree')").await?;
+        nvim.execute_lua("buf_attach(...)", vec![buf.get_value().clone()]).await?;
+        info!("Tree initialized");
+        Ok(Self {
             bufnr,
             icon_ns_id,
             config: Default::default(),
@@ -167,7 +177,7 @@ impl Tree {
             expand_store: Default::default(),
             git_map: Default::default(),
             col_map: Default::default(),
-        }
+        })
     }
     pub fn get_fileitem(&self, idx: usize) -> &FileItem {
         &self.fileitems[idx]
