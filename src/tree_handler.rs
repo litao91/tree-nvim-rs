@@ -60,7 +60,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             (Value::from("winheight"), Value::from(tree.config.winheight)),
             (
                 Value::from("split"),
-                Value::from(Into::<u8>::into(tree.config.split.clone())),
+                Value::from(Into::<&str>::into(tree.config.split.clone())),
             ),
             (Value::from("new"), Value::from(tree.config.new)),
             (Value::from("toggle"), Value::from(tree.config.toggle)),

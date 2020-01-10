@@ -16,9 +16,15 @@ pub enum SplitType {
     Floating,
 }
 
-impl Into<u8> for SplitType {
-    fn into(self) -> u8 {
-        self as u8
+impl Into<&'static str> for SplitType {
+    fn into(self) -> &'static str {
+        match self {
+            SplitType::Vertical => "vertical",
+            SplitType::Horizontal => "horizontal",
+            SplitType::No => "no",
+            SplitType::Tab => "tab",
+            SplitType::Floating => "floating",
+        }
     }
 }
 
@@ -28,8 +34,8 @@ impl From<&str> for SplitType {
             "vertical" => SplitType::Vertical,
             "horizontal" => SplitType::Horizontal,
             "no" => SplitType::No,
-            "Tab" => SplitType::Tab,
-            "Floating" => SplitType::Floating,
+            "tab" => SplitType::Tab,
+            "floating" => SplitType::Floating,
             _ => SplitType::Vertical,
         }
     }
@@ -89,7 +95,7 @@ impl Default for Config {
             buffer_name: String::from("string"),
 
             direction: String::new(),
-            split: SplitType::No,
+            split: SplitType::Vertical,
             winrelative: String::from("editor"),
             winheight: 30,
             winwidth: 50,
@@ -168,7 +174,6 @@ impl Tree {
         buf.set_option("modifiable", Value::from(false)).await?;
         nvim.command("lua require('tree')").await?;
         nvim.execute_lua("buf_attach(...)", vec![buf.get_value().clone()]).await?;
-        info!("Tree initialized");
         Ok(Self {
             bufnr,
             icon_ns_id,
