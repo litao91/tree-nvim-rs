@@ -34,10 +34,9 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Default for TreeHandler<W> {
 }
 
 impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
-    async fn create_namespace(nvim: Neovim<<Self as Handler>::Writer>) -> i64 {
-        let ns_id = nvim.create_namespace("tree_icon").await.unwrap();
-        info!("namespace_id for tree_icon: {}", ns_id);
-        ns_id
+    async fn create_namespace(nvim: Neovim<<Self as Handler>::Writer>) -> Result<i64, Box<dyn std::error::Error>> {
+        let ns_id = nvim.create_namespace("tree_icon").await?;
+        Ok(ns_id)
     }
 
     async fn create_tree(
@@ -49,7 +48,6 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let bufnr = buf.get_value().as_ext().unwrap();
         let bufnr = (bufnr.0, Vec::from(bufnr.1));
-        info!("bufnr: {:?}", bufnr);
         let mut tree = Tree::new(bufnr.clone(), ns_id);
         {
             let d = data.read().await;
@@ -66,7 +64,10 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             ),
             (Value::from("new"), Value::from(tree.config.new)),
             (Value::from("toggle"), Value::from(tree.config.toggle)),
-            (Value::from("direction"), Value::from(tree.config.direction.clone())),
+            (
+                Value::from("direction"),
+                Value::from(tree.config.direction.clone()),
+            ),
         ]);
 
         {
@@ -75,8 +76,10 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             d.treebufs.push_front(bufnr.clone());
             d.pref_bufnr = Some(bufnr.clone());
         }
+        info!("before!");
         nvim.execute_lua("resume(...)", vec![Value::Ext(bufnr.0, bufnr.1), tree_cfg])
             .await?;
+        info!("New tree created!");
         Ok(())
     }
 
@@ -120,7 +123,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         }
         if is_new {
             info!("creating new tree");
-            let ns_id = Self::create_namespace(nvim.clone()).await;
+            let ns_id = Self::create_namespace(nvim.clone()).await?;
             let buf = Self::create_buf(data.clone(), nvim.clone()).await?;
             Self::create_tree(data, nvim, buf, ns_id, &path).await?;
         } else {
@@ -177,7 +180,9 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                 };
                 let data = self.data.clone();
                 tokio::spawn(async move {
-                    Self::start_tree(data, nvim, path).await.unwrap();
+                    if let Err(e) = Self::start_tree(data, nvim, path).await {
+                        error!("Start tree error: {:?}", e);
+                    }
                 });
 
                 Ok(Value::Nil)

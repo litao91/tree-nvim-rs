@@ -105,7 +105,9 @@ impl Config {
     pub fn update(&mut self, cfg: &HashMap<String, Value>) {
         // TODO: handle type mismatch
         for (k, v) in cfg {
-            match k.as_str() {
+            let k_str = k.as_str();
+            let k_str = &k_str[1..k.len()-1];
+            match k_str {
                 "auto_recursive_level" => {
                     if let Some(v) = v.as_u64() {
                         self.auto_recursive_level = v as u16
@@ -113,7 +115,6 @@ impl Config {
                         warn!("type mismatch for auto_recursive_level: {}", v)
                     }
                 }
-
                 "wincol" => self.wincol = v.as_u64().unwrap() as u16,
                 "winheigth" => self.winheight = v.as_u64().unwrap() as u16,
                 "winrow" => self.winrow = v.as_u64().unwrap() as u16,
