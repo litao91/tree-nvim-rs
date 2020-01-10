@@ -5,6 +5,7 @@ use log::*;
 use nvim_rs::{exttypes::Buffer, runtime::AsyncWrite, Handler, Neovim, Value};
 use std::collections::HashMap;
 use std::collections::LinkedList;
+use std::convert::From;
 use std::sync::Arc;
 
 #[derive(Default)]
@@ -14,6 +15,7 @@ pub struct TreeHandlerData {
     treebufs: LinkedList<(i8, Vec<u8>)>, // recently used order
     // buffer: Option<Buffer<<TreeHandler as Handler>::Writer>>,
     buf_count: u32,
+    pref_bufnr: Option<(i8, Vec<u8>)>,
 }
 type TreeHandlerDataPtr = Arc<RwLock<TreeHandlerData>>;
 
@@ -40,10 +42,11 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
 
     async fn create_tree(
         data: TreeHandlerDataPtr,
-        _nvim: Neovim<<Self as Handler>::Writer>,
+        nvim: Neovim<<Self as Handler>::Writer>,
         buf: Buffer<<Self as Handler>::Writer>,
         ns_id: i64,
-    ) {
+        path: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let bufnr = buf.get_value().as_ext().unwrap();
         let bufnr = (bufnr.0, Vec::from(bufnr.1));
         info!("bufnr: {:?}", bufnr);
@@ -52,17 +55,35 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             let d = data.read().await;
             tree.config.update(&d.cfg_map);
         }
+        tree.change_root(path).await?;
+
+        let tree_cfg = Value::Map(vec![
+            (Value::from("winwidth"), Value::from(tree.config.winwidth)),
+            (Value::from("winheight"), Value::from(tree.config.winheight)),
+            (
+                Value::from("split"),
+                Value::from(Into::<u8>::into(tree.config.split.clone())),
+            ),
+            (Value::from("new"), Value::from(tree.config.new)),
+            (Value::from("toggle"), Value::from(tree.config.toggle)),
+            (Value::from("direction"), Value::from(tree.config.direction.clone())),
+        ]);
+
         {
             let mut d = data.write().await;
             d.trees.insert(bufnr.clone(), tree);
             d.treebufs.push_front(bufnr.clone());
+            d.pref_bufnr = Some(bufnr.clone());
         }
+        nvim.execute_lua("resume(...)", vec![Value::Ext(bufnr.0, bufnr.1), tree_cfg])
+            .await?;
+        Ok(())
     }
 
     async fn create_buf(
         data: TreeHandlerDataPtr,
         nvim: Neovim<<Self as Handler>::Writer>,
-    ) -> Buffer<<Self as Handler>::Writer> {
+    ) -> Result<Buffer<<Self as Handler>::Writer>, Box<dyn std::error::Error>> {
         let buf = nvim.create_buf(false, true).await.unwrap();
         info!("new buf created: {:?}", buf.get_value());
         let mut d = data.write().await;
@@ -70,15 +91,15 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         // TODO: use atomic?
         d.buf_count += 1;
         let buf_name = format!("Tree-{}", buf_num);
-        buf.set_name(&buf_name).await.unwrap();
-        buf
+        buf.set_name(&buf_name).await?;
+        Ok(buf)
     }
 
     async fn start_tree(
         data: TreeHandlerDataPtr,
         nvim: Neovim<<Self as Handler>::Writer>,
         path: String,
-    ) {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         info!("start_tree");
         let is_new;
         {
@@ -100,10 +121,11 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         if is_new {
             info!("creating new tree");
             let ns_id = Self::create_namespace(nvim.clone()).await;
-            let buf = Self::create_buf(data.clone(), nvim.clone()).await;
-            Self::create_tree(data, nvim, buf, ns_id).await;
+            let buf = Self::create_buf(data.clone(), nvim.clone()).await?;
+            Self::create_tree(data, nvim, buf, ns_id, &path).await?;
         } else {
         }
+        Ok(())
     }
 }
 
@@ -155,7 +177,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                 };
                 let data = self.data.clone();
                 tokio::spawn(async move {
-                    Self::start_tree(data, nvim, path).await;
+                    Self::start_tree(data, nvim, path).await.unwrap();
                 });
 
                 Ok(Value::Nil)

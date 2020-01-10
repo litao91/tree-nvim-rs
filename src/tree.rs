@@ -7,12 +7,19 @@ use std::convert::From;
 use std::io;
 use tokio::fs;
 
+#[derive(Clone)]
 pub enum SplitType {
     Vertical,
     Horizontal,
     No,
     Tab,
     Floating,
+}
+
+impl Into<u8> for SplitType {
+    fn into(self) -> u8 {
+        self as u8
+    }
 }
 
 impl From<&str> for SplitType {
@@ -138,6 +145,8 @@ impl Config {
     }
 }
 
+const KSTOP: usize = 90;
+
 pub struct Tree {
     pub bufnr: (i8, Vec<u8>), // use bufnr to avoid tedious generic code
     pub icon_ns_id: i64,
@@ -145,6 +154,7 @@ pub struct Tree {
     fileitems: Vec<FileItem>,
     expand_store: HashMap<String, bool>,
     git_map: HashMap<String, GitStatus>,
+    col_map: HashMap<ColumnType, Vec<Cell>>,
 }
 impl Tree {
     pub fn new(bufnr: (i8, Vec<u8>), icon_ns_id: i64) -> Self {
@@ -155,6 +165,7 @@ impl Tree {
             fileitems: Default::default(),
             expand_store: Default::default(),
             git_map: Default::default(),
+            col_map: Default::default(),
         }
     }
     pub fn get_fileitem(&self, idx: usize) -> &FileItem {
@@ -175,9 +186,42 @@ impl Tree {
     }
 
     fn insert_root_cell(&mut self, idx: usize) {
-        let ft = &self.fileitems[0];
-        let start = 0;
-        let byte_start = 0;
-        for col in &self.config.columns {}
+        let ft = &self.fileitems[idx];
+        let mut start = 0;
+        let mut byte_start = 0;
+        for col in &self.config.columns {
+            let mut cell = Cell::new(self, ft, col.clone());
+            cell.col_start = start;
+            cell.byte_start = byte_start;
+
+            // speical for root cell
+            if *col == ColumnType::FILENAME {
+                let mut text = self.config.root_marker.clone();
+                text.push_str(ft.path.to_str().unwrap());
+                cell.text = text;
+            }
+
+            // char size is not always 1, TODO: count grid
+            cell.byte_end = byte_start + cell.text.len();
+            cell.col_end = start + cell.text.len();
+
+            // NOTE: alignment
+            if *col == ColumnType::FILENAME {
+                let stop = KSTOP - cell.col_end;
+                if stop > 0 {
+                    cell.col_end += KSTOP;
+                    cell.byte_end += KSTOP;
+                }
+            }
+
+            let sep = if *col == ColumnType::INDENT { 0 } else { 1 };
+            start = cell.col_end + sep;
+            byte_start = cell.byte_end + sep;
+            if !self.col_map.contains_key(col) {
+                self.col_map.insert(col.clone(), Vec::new());
+            }
+            // TODO: inefficient here
+            self.col_map.get_mut(col).unwrap().insert(idx, cell);
+        }
     }
 }

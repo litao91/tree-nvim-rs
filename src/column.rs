@@ -343,7 +343,7 @@ pub static GIT_INDICATORS: &[&[&'static str]] = &[
 static READ_ONLY_ICON: &'static str = "✗";
 static SELECTED_ICON: &'static str = "✓";
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Hash)]
 pub enum ColumnType {
     MARK,
     INDENT,
@@ -441,13 +441,12 @@ impl FileItem {
 }
 
 pub struct Cell {
-    col_start: usize,
-    col_end: usize,
-    byte_start: usize,
-    byte_end: usize,
-    // TODO: size is not equal to the column num
-    text: Vec<u8>,
-    color: usize,
+    pub col_start: usize,
+    pub col_end: usize,
+    pub byte_start: usize,
+    pub byte_end: usize,
+    pub text: String,
+    pub color: usize,
 }
 
 impl Cell {
@@ -551,7 +550,7 @@ impl Cell {
             col_end: 0,
             byte_start: 0,
             byte_end: 0,
-            text: text.into_bytes(),
+            text,
             color,
         }
     }
