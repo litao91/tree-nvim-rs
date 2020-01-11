@@ -219,12 +219,12 @@ impl Tree {
         Ok(())
     }
 
-    fn entry_info_recursively(
-        &self,
+    fn entry_info_recursively<'a>(
+        &'a self,
         item: Arc<FileItem>,
-        fileitem_lst: &mut Vec<FileItemPtr>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn std::error::Error>>>>> {
-        Box::pin(async {
+        fileitem_lst: &'a mut Vec<FileItemPtr>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn std::error::Error>>> + 'a>> {
+        Box::pin(async move {
             let mut read_dir = fs::read_dir(&item.path).await?;
             let mut entries = Vec::new();
             // filter: dirs, files, no dot and dot dot
@@ -256,7 +256,7 @@ impl Tree {
             let mut i = 0;
             let count = entries.len();
             for entry in entries {
-                let fileitem = FileItem::new(fs::canonicalize(entry.0.path()).await?, entry.1);
+                let mut fileitem = FileItem::new(fs::canonicalize(entry.0.path()).await?, entry.1);
                 fileitem.level = level;
                 fileitem.parent = Some(item.clone());
                 if i == count - 1 {
@@ -265,7 +265,7 @@ impl Tree {
                 if let Some(expand) = self.expand_store.get(fileitem.path.to_str().unwrap()) {
                     fileitem.opened_tree = true;
                     fileitem_lst.push(Arc::new(fileitem));
-                    self.entry_info_recursively(item, fileitem_lst).await?;
+                    self.entry_info_recursively(item.clone(), fileitem_lst).await?;
                 } else {
                     fileitem_lst.push(Arc::new(fileitem));
                 }
