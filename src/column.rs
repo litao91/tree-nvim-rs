@@ -411,6 +411,7 @@ pub enum GitStatus {
     Unknown,
 }
 
+#[derive(Debug)]
 pub struct FileItem {
     pub path: std::path::PathBuf,
     pub metadata: Metadata,

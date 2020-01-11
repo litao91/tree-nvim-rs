@@ -206,18 +206,59 @@ impl Tree {
 
         // TODO: update git map
         self.targets.clear();
+        self.col_map.clear();
 
         let filemeta = fs::metadata(root_path_str).await?;
         let mut fileitems = vec![Arc::new(FileItem::new(root_path, filemeta))];
-        self.entry_info_recursively(fileitems[0].clone(), &mut fileitems).await?;
+        self.entry_info_recursively(fileitems[0].clone(), &mut fileitems)
+            .await?;
+        info!("items: {:?}", &fileitems);
+        self.fileitems = fileitems;
 
-        self.insert_root_cell(0);
-
+        // make line for each file item.
+        self.insert_root_cells(0);
         let mut ret = Vec::new();
         ret.push(self.makeline(0));
 
-        self.fileitems = fileitems;
+        for pos in 1..self.fileitems.len() {
+            self.insert_row_cells(pos);
+            ret.push(self.makeline(pos));
+        }
+
         Ok(())
+    }
+
+    fn insert_row_cells(&mut self, pos: usize) {
+        let fileitem = &self.fileitems[pos];
+        let mut start = 0;
+        let mut byte_start = 0;
+        for col in &self.config.columns {
+            let mut cell = Cell::new(self, fileitem, col.clone());
+            cell.byte_start = byte_start;
+            cell.byte_end = byte_start + cell.text.len();
+            cell.col_start = start;
+
+            // TODO: count grid for file name
+            cell.col_end = start + cell.text.len();
+            // NOTE: alignment
+            if *col == ColumnType::FILENAME {
+                let stop = KSTOP - cell.col_end;
+                if stop > 0 {
+                    cell.col_end += KSTOP;
+                    cell.byte_end += KSTOP;
+                } else if KSTOP > cell.col_start + 5 {
+                    // TODO: implement this
+                }
+            }
+            let sep = if *col == ColumnType::INDENT { 0 } else { 1 };
+            start = cell.col_end + sep;
+            byte_start = cell.byte_end + sep;
+            if !self.col_map.contains_key(col) {
+                self.col_map.insert(col.clone(), Vec::new());
+            }
+            // TODO: inefficient here
+            self.col_map.get_mut(col).unwrap().insert(pos, cell);
+        }
     }
 
     fn entry_info_recursively<'a>(
@@ -263,20 +304,25 @@ impl Tree {
                 if i == count - 1 {
                     fileitem.last = true;
                 }
+                i += 1;
                 if let Some(expand) = self.expand_store.get(fileitem.path.to_str().unwrap()) {
-                    fileitem.opened_tree = true;
-                    fileitem_lst.push(Arc::new(fileitem));
-                    self.entry_info_recursively(item.clone(), fileitem_lst).await?;
+                    if *expand {
+                        fileitem.opened_tree = true;
+                        fileitem_lst.push(Arc::new(fileitem));
+                        self.entry_info_recursively(item.clone(), fileitem_lst)
+                            .await?;
+                    } else {
+                        fileitem_lst.push(Arc::new(fileitem));
+                    }
                 } else {
                     fileitem_lst.push(Arc::new(fileitem));
                 }
-                i += 1;
             }
             Ok(())
         })
     }
 
-    fn insert_root_cell(&mut self, idx: usize) {
+    fn insert_root_cells(&mut self, idx: usize) {
         let ft = &self.fileitems[idx];
         let mut start = 0;
         let mut byte_start = 0;
