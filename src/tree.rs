@@ -195,7 +195,7 @@ impl Tree {
     pub fn get_fileitem(&self, idx: usize) -> &FileItem {
         &self.fileitems[idx]
     }
-    pub async fn change_root(&mut self, path_str: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn change_root<W: AsyncWrite + Send + Sync + Unpin + 'static>(&mut self, path_str: &str, nvim: &Neovim<W>) -> Result<(), Box<dyn std::error::Error>> {
         let path = std::path::Path::new(path_str);
         if !path.is_dir() {
             return Ok(());
@@ -212,7 +212,6 @@ impl Tree {
         let mut fileitems = vec![Arc::new(FileItem::new(root_path, filemeta))];
         self.entry_info_recursively(fileitems[0].clone(), &mut fileitems)
             .await?;
-        info!("items: {:?}", &fileitems);
         self.fileitems = fileitems;
 
         // make line for each file item.
@@ -225,6 +224,15 @@ impl Tree {
             ret.push(self.makeline(pos));
         }
 
+        self.buf_set_lines(nvim, 0, -1, true, ret).await?;
+        Ok(())
+    }
+
+    async fn buf_set_lines<W: AsyncWrite + Send + Sync + Unpin + 'static>(&self, nvim: &Neovim<W>, start: i64, end: i64, strict: bool, replacement: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+        let buf = Buffer::new(Value::Ext(self.bufnr.0, self.bufnr.1.clone()), nvim.clone());
+        buf.set_option("modifiable", Value::from(true)).await?;
+        buf.set_lines(start, end, strict, replacement).await?;
+        buf.set_option("modifiable", Value::from(false)).await?;
         Ok(())
     }
 

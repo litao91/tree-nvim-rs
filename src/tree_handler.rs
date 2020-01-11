@@ -55,7 +55,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             let d = data.read().await;
             tree.config.update(&d.cfg_map);
         }
-        tree.change_root(path).await?;
+        tree.change_root(path, &nvim).await?;
 
         let tree_cfg = Value::Map(vec![
             (Value::from("winwidth"), Value::from(tree.config.winwidth)),
