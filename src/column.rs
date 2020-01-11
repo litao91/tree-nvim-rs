@@ -417,10 +417,11 @@ pub struct FileItem {
     pub level: usize,
     pub opened_tree: bool,
     pub selected: bool,
-    pub parent: Option<usize>, // the index of the parent in the tree list
+    pub parent: Option<FileItemPtr>, // the index of the parent in the Tree::fileitems
     pub last: bool,
     // pub git_map: HashMap<String, GitStatus>,
 }
+pub type FileItemPtr = std::sync::Arc<FileItem>;
 
 impl FileItem {
     pub fn new(path: std::path::PathBuf, metadata: Metadata) -> Self {
@@ -485,19 +486,18 @@ impl Cell {
                     inversed_elements.push(prefix.as_str());
                     let max_level = fileitem.level - 1;
                     let mut i = 0;
-                    let mut pf_idx = fileitem.parent;
-                    while let Some(pf_idx_v) = pf_idx {
+                    let mut parent = &fileitem.parent;
+                    while let Some(pf) = parent {
                         if i >= max_level {
                             break;
                         }
-                        let pf = &tree.get_fileitem(pf_idx_v);
                         if pf.last {
                             inversed_elements.push("  ");
                         } else {
                             inversed_elements.push("│ ");
                         }
 
-                        pf_idx = pf.parent;
+                        parent = &pf.parent;
                         i = i + 1;
                     }
                 }

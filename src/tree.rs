@@ -1,10 +1,15 @@
 use crate::column::ColumnType;
-use crate::column::{Cell, FileItem, GitStatus};
+use crate::column::{Cell, FileItem, FileItemPtr, GitStatus};
+use crate::fs_utils;
 use log::*;
 use nvim_rs::{exttypes::Buffer, runtime::AsyncWrite, Neovim, Value};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::From;
+use std::future::Future;
 use std::io;
+use std::pin::Pin;
+use std::sync::Arc;
 use tokio::fs;
 
 #[derive(Clone)]
@@ -158,10 +163,11 @@ pub struct Tree {
     pub bufnr: (i8, Vec<u8>), // use bufnr to avoid tedious generic code
     pub icon_ns_id: i64,
     pub config: Config,
-    fileitems: Vec<FileItem>,
+    fileitems: Vec<FileItemPtr>,
     expand_store: HashMap<String, bool>,
-    git_map: HashMap<String, GitStatus>,
+    // git_map: HashMap<String, GitStatus>,
     col_map: HashMap<ColumnType, Vec<Cell>>,
+    targets: Vec<usize>,
 }
 impl Tree {
     pub async fn new<W: AsyncWrite + Send + Sync + Unpin + 'static>(
@@ -181,8 +187,9 @@ impl Tree {
             config: Default::default(),
             fileitems: Default::default(),
             expand_store: Default::default(),
-            git_map: Default::default(),
+            // git_map: Default::default(),
             col_map: Default::default(),
+            targets: Default::default(),
         })
     }
     pub fn get_fileitem(&self, idx: usize) -> &FileItem {
@@ -196,10 +203,76 @@ impl Tree {
         let root_path = fs::canonicalize(path).await?;
         let root_path_str = root_path.to_str().unwrap();
         self.expand_store.insert(root_path_str.to_owned(), true);
+
+        // TODO: update git map
+        self.targets.clear();
+
         let filemeta = fs::metadata(root_path_str).await?;
-        self.fileitems.push(FileItem::new(root_path, filemeta));
+        let mut fileitems = vec![Arc::new(FileItem::new(root_path, filemeta))];
+
         self.insert_root_cell(0);
+
+        let mut ret = Vec::new();
+        ret.push(self.makeline(0));
+
+        self.fileitems = fileitems;
         Ok(())
+    }
+
+    fn entry_info_recursively(
+        &self,
+        item: Arc<FileItem>,
+        fileitem_lst: &mut Vec<FileItemPtr>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn std::error::Error>>>>> {
+        Box::pin(async {
+            let mut read_dir = fs::read_dir(&item.path).await?;
+            let mut entries = Vec::new();
+            // filter: dirs, files, no dot and dot dot
+            while let Some(entry) = read_dir.next_entry().await? {
+                // skip hidden file or dot or dot dot
+                if fs_utils::is_dot_or_dotdot(&entry)
+                    || (!self.config.show_ignored_files && fs_utils::is_hidden(&entry))
+                {
+                    continue;
+                }
+                let metadata = entry.metadata().await?;
+                let file_type = entry.file_type().await?;
+                entries.push((entry, metadata, file_type));
+            }
+            if entries.len() <= 0 {
+                return Ok(());
+            }
+            // directory first, name order
+            entries.sort_by(|l, r| {
+                if l.1.is_dir() && !r.1.is_dir() {
+                    Ordering::Less
+                } else if !l.1.is_dir() && l.1.is_dir() {
+                    Ordering::Greater
+                } else {
+                    l.0.file_name().cmp(&r.0.file_name())
+                }
+            });
+            let level = item.level + 1;
+            let mut i = 0;
+            let count = entries.len();
+            for entry in entries {
+                let fileitem = FileItem::new(fs::canonicalize(entry.0.path()).await?, entry.1);
+                fileitem.level = level;
+                fileitem.parent = Some(item.clone());
+                if i == count - 1 {
+                    fileitem.last = true;
+                }
+                if let Some(expand) = self.expand_store.get(fileitem.path.to_str().unwrap()) {
+                    fileitem.opened_tree = true;
+                    fileitem_lst.push(Arc::new(fileitem));
+                    self.entry_info_recursively(item, fileitem_lst).await?;
+                } else {
+                    fileitem_lst.push(Arc::new(fileitem));
+                }
+                i += 1;
+            }
+            Ok(())
+        })
     }
 
     fn insert_root_cell(&mut self, idx: usize) {
@@ -240,5 +313,25 @@ impl Tree {
             // TODO: inefficient here
             self.col_map.get_mut(col).unwrap().insert(idx, cell);
         }
+    }
+
+    fn makeline(&self, pos: usize) -> String {
+        let mut start = 0;
+        let mut line = String::new();
+        for col in &self.config.columns {
+            let cell = &self.col_map[col][pos];
+            unsafe {
+                line.push_str(&String::from_utf8_unchecked(vec![
+                    b' ';
+                    cell.col_start - start
+                ]));
+            }
+            line.push_str(&cell.text);
+            let len = cell.byte_end - cell.byte_start - cell.text.len();
+            let space_after = unsafe { String::from_utf8_unchecked(vec![b' '; len]) };
+            line.push_str(&space_after);
+            start = cell.col_end;
+        }
+        line
     }
 }
