@@ -195,7 +195,7 @@ impl Tree {
     pub fn get_fileitem(&self, idx: usize) -> &FileItem {
         &self.fileitems[idx]
     }
-    pub async fn change_root(&mut self, path_str: &str) -> io::Result<()> {
+    pub async fn change_root(&mut self, path_str: &str) -> Result<(), Box<dyn std::error::Error>> {
         let path = std::path::Path::new(path_str);
         if !path.is_dir() {
             return Ok(());
@@ -209,6 +209,7 @@ impl Tree {
 
         let filemeta = fs::metadata(root_path_str).await?;
         let mut fileitems = vec![Arc::new(FileItem::new(root_path, filemeta))];
+        self.entry_info_recursively(fileitems[0].clone(), &mut fileitems).await?;
 
         self.insert_root_cell(0);
 
@@ -223,7 +224,7 @@ impl Tree {
         &'a self,
         item: Arc<FileItem>,
         fileitem_lst: &'a mut Vec<FileItemPtr>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn std::error::Error>>> + 'a>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn std::error::Error>>> + 'a + Send>> {
         Box::pin(async move {
             let mut read_dir = fs::read_dir(&item.path).await?;
             let mut entries = Vec::new();
