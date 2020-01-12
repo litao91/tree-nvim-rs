@@ -392,25 +392,28 @@ impl Tree {
             let fileitem = &self.fileitems[i];
             for col in &self.config.columns {
                 let cell = &self.col_map.get(col).unwrap()[i];
-                match *col {
-                    ColumnType::FILENAME => {
-                        let hl_group = format!(
-                            "tree_{}_{}",
-                            Into::<u8>::into(col.clone()),
-                            if fileitem.metadata.is_dir() { 1 } else { 0 }
-                        );
-                        buf.add_highlight(
-                            self.icon_ns_id,
-                            &hl_group,
-                            i as i64,
-                            cell.byte_start as i64,
-                            (cell.byte_start + cell.text.len()) as i64,
-                        )
-                        .await?;
+                let col_u8 = Into::<u8>::into(col.clone());
+                let hl_group = match *col {
+                    ColumnType::FILENAME => Some(format!(
+                        "tree_{}_{}",
+                        col_u8,
+                        if fileitem.metadata.is_dir() { 1 } else { 0 }
+                    )),
+                    ColumnType::ICON | ColumnType::GIT | ColumnType::MARK => {
+                        Some(format!("tree_{}_{}", col_u8, cell.color))
                     }
-                    ColumnType::ICON | ColumnType::GIT | ColumnType::MARK => {}
-                    ColumnType::SIZE | ColumnType::TIME => {}
-                    _ => {}
+                    ColumnType::SIZE | ColumnType::TIME => Some(format!("tree_{}", col_u8)),
+                    _ => None,
+                };
+                if let Some(hl_group) = hl_group {
+                    buf.add_highlight(
+                        self.icon_ns_id,
+                        &hl_group,
+                        i as i64,
+                        cell.byte_start as i64,
+                        (cell.byte_start + cell.text.len()) as i64,
+                    )
+                    .await?;
                 }
             }
         }
