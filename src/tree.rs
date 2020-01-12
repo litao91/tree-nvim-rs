@@ -2,7 +2,11 @@ use crate::column::ColumnType;
 use crate::column::{Cell, FileItem, FileItemPtr, GitStatus};
 use crate::fs_utils;
 use log::*;
-use nvim_rs::{exttypes::Buffer, runtime::AsyncWrite, Neovim, Value};
+use nvim_rs::{
+    exttypes::{Buffer, Window},
+    runtime::AsyncWrite,
+    Neovim, Value,
+};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::From;
@@ -168,6 +172,7 @@ pub struct Tree {
     // git_map: HashMap<String, GitStatus>,
     col_map: HashMap<ColumnType, Vec<Cell>>,
     targets: Vec<usize>,
+    cursor_history: HashMap<String, i64>,
 }
 impl Tree {
     pub async fn new<W: AsyncWrite + Send + Sync + Unpin + 'static>(
@@ -190,6 +195,7 @@ impl Tree {
             // git_map: Default::default(),
             col_map: Default::default(),
             targets: Default::default(),
+            cursor_history: Default::default(),
         })
     }
     pub fn get_fileitem(&self, idx: usize) -> &FileItem {
@@ -206,6 +212,10 @@ impl Tree {
         }
         let root_path = fs::canonicalize(path).await?;
         let root_path_str = root_path.to_str().unwrap();
+        let last_cursor = match self.cursor_history.get(root_path_str) {
+            Some(v) => Some(*v),
+            None => None,
+        };
         self.expand_store.insert(root_path_str.to_owned(), true);
 
         // TODO: update git map
@@ -231,6 +241,11 @@ impl Tree {
         }
 
         self.buf_set_lines(nvim, 0, -1, true, ret).await?;
+        if let Some(v) = last_cursor {
+            let win = Window::new(Value::from(0), nvim.clone());
+            win.set_cursor((0, v)).await?;
+        }
+        self.hl_lines(&nvim, 0, self.fileitems.len()).await?;
         Ok(())
     }
 
@@ -311,7 +326,7 @@ impl Tree {
             entries.sort_by(|l, r| {
                 if l.1.is_dir() && !r.1.is_dir() {
                     Ordering::Less
-                } else if !l.1.is_dir() && l.1.is_dir() {
+                } else if !l.1.is_dir() && r.1.is_dir() {
                     Ordering::Greater
                 } else {
                     l.0.file_name().cmp(&r.0.file_name())
@@ -363,5 +378,42 @@ impl Tree {
             start = cell.col_end;
         }
         line
+    }
+
+    // [sl, el)
+    async fn hl_lines<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &self,
+        nvim: &Neovim<W>,
+        sl: usize,
+        el: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let buf = Buffer::new(Value::Ext(self.bufnr.0, self.bufnr.1.clone()), nvim.clone());
+        for i in sl..el {
+            let fileitem = &self.fileitems[i];
+            for col in &self.config.columns {
+                let cell = &self.col_map.get(col).unwrap()[i];
+                match *col {
+                    ColumnType::FILENAME => {
+                        let hl_group = format!(
+                            "tree_{}_{}",
+                            Into::<u8>::into(col.clone()),
+                            if fileitem.metadata.is_dir() { 1 } else { 0 }
+                        );
+                        buf.add_highlight(
+                            self.icon_ns_id,
+                            &hl_group,
+                            i as i64,
+                            cell.byte_start as i64,
+                            (cell.byte_start + cell.text.len()) as i64,
+                        )
+                        .await?;
+                    }
+                    ColumnType::ICON | ColumnType::GIT | ColumnType::MARK => {}
+                    ColumnType::SIZE | ColumnType::TIME => {}
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
     }
 }
