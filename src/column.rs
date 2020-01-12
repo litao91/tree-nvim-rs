@@ -452,7 +452,7 @@ pub struct Cell {
 }
 
 impl Cell {
-    pub fn new(tree: &Tree, fileitem: &FileItem, ty: ColumnType) -> Self {
+    pub fn new(tree: &Tree, fileitem: &FileItem, ty: ColumnType, is_root_cell: bool) -> Self {
         let mut text = String::new();
         let mut color: usize = Icon::Unknonwn.into();
         match ty {
@@ -537,10 +537,15 @@ impl Cell {
             }
             ColumnType::FILENAME => {
                 color = GuiColor::YELLOW.into();
-                text = String::from(fileitem.path.file_name().and_then(OsStr::to_str).unwrap());
-                if fileitem.metadata.is_dir() {
-                    text.push('/');
-                    color = GuiColor::BLUE.into();
+                if is_root_cell {
+                    text = tree.config.root_marker.clone();
+                    text.push_str(fileitem.path.to_str().unwrap());
+                } else {
+                    text = String::from(fileitem.path.file_name().and_then(OsStr::to_str).unwrap());
+                    if fileitem.metadata.is_dir() {
+                        text.push('/');
+                        color = GuiColor::BLUE.into();
+                    }
                 }
             }
             ColumnType::SIZE => {}

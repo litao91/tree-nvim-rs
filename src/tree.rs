@@ -195,7 +195,11 @@ impl Tree {
     pub fn get_fileitem(&self, idx: usize) -> &FileItem {
         &self.fileitems[idx]
     }
-    pub async fn change_root<W: AsyncWrite + Send + Sync + Unpin + 'static>(&mut self, path_str: &str, nvim: &Neovim<W>) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn change_root<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        path_str: &str,
+        nvim: &Neovim<W>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let path = std::path::Path::new(path_str);
         if !path.is_dir() {
             return Ok(());
@@ -215,12 +219,14 @@ impl Tree {
         self.fileitems = fileitems;
 
         // make line for each file item.
-        self.insert_root_cells(0);
+        // first the root cell
+        self.insert_cells(0, true);
         let mut ret = Vec::new();
         ret.push(self.makeline(0));
 
+        // then the cells below
         for pos in 1..self.fileitems.len() {
-            self.insert_row_cells(pos);
+            self.insert_cells(pos, false);
             ret.push(self.makeline(pos));
         }
 
@@ -228,7 +234,15 @@ impl Tree {
         Ok(())
     }
 
-    async fn buf_set_lines<W: AsyncWrite + Send + Sync + Unpin + 'static>(&self, nvim: &Neovim<W>, start: i64, end: i64, strict: bool, replacement: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    // set the content of the buffer
+    async fn buf_set_lines<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &self,
+        nvim: &Neovim<W>,
+        start: i64,
+        end: i64,
+        strict: bool,
+        replacement: Vec<String>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let buf = Buffer::new(Value::Ext(self.bufnr.0, self.bufnr.1.clone()), nvim.clone());
         buf.set_option("modifiable", Value::from(true)).await?;
         buf.set_lines(start, end, strict, replacement).await?;
@@ -236,12 +250,13 @@ impl Tree {
         Ok(())
     }
 
-    fn insert_row_cells(&mut self, pos: usize) {
-        let fileitem = &self.fileitems[pos];
+    // insert the cell at the given row
+    fn insert_cells(&mut self, row_nr: usize, is_root: bool) {
+        let fileitem = &self.fileitems[row_nr];
         let mut start = 0;
         let mut byte_start = 0;
         for col in &self.config.columns {
-            let mut cell = Cell::new(self, fileitem, col.clone());
+            let mut cell = Cell::new(self, fileitem, col.clone(), is_root);
             cell.byte_start = byte_start;
             cell.byte_end = byte_start + cell.text.len();
             cell.col_start = start;
@@ -254,7 +269,7 @@ impl Tree {
                 if stop > 0 {
                     cell.col_end += KSTOP;
                     cell.byte_end += KSTOP;
-                } else if KSTOP > cell.col_start + 5 {
+                } else if is_root && KSTOP > cell.col_start + 5 {
                     // TODO: implement this
                 }
             }
@@ -265,7 +280,7 @@ impl Tree {
                 self.col_map.insert(col.clone(), Vec::new());
             }
             // TODO: inefficient here
-            self.col_map.get_mut(col).unwrap().insert(pos, cell);
+            self.col_map.get_mut(col).unwrap().insert(row_nr, cell);
         }
     }
 
@@ -328,46 +343,6 @@ impl Tree {
             }
             Ok(())
         })
-    }
-
-    fn insert_root_cells(&mut self, idx: usize) {
-        let ft = &self.fileitems[idx];
-        let mut start = 0;
-        let mut byte_start = 0;
-        for col in &self.config.columns {
-            let mut cell = Cell::new(self, ft, col.clone());
-            cell.col_start = start;
-            cell.byte_start = byte_start;
-
-            // speical for root cell
-            if *col == ColumnType::FILENAME {
-                let mut text = self.config.root_marker.clone();
-                text.push_str(ft.path.to_str().unwrap());
-                cell.text = text;
-            }
-
-            // char size is not always 1, TODO: count grid
-            cell.byte_end = byte_start + cell.text.len();
-            cell.col_end = start + cell.text.len();
-
-            // NOTE: alignment
-            if *col == ColumnType::FILENAME {
-                let stop = KSTOP - cell.col_end;
-                if stop > 0 {
-                    cell.col_end += KSTOP;
-                    cell.byte_end += KSTOP;
-                }
-            }
-
-            let sep = if *col == ColumnType::INDENT { 0 } else { 1 };
-            start = cell.col_end + sep;
-            byte_start = cell.byte_end + sep;
-            if !self.col_map.contains_key(col) {
-                self.col_map.insert(col.clone(), Vec::new());
-            }
-            // TODO: inefficient here
-            self.col_map.get_mut(col).unwrap().insert(idx, cell);
-        }
     }
 
     fn makeline(&self, pos: usize) -> String {

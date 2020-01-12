@@ -12,9 +12,9 @@ use std::sync::Arc;
 use tokio::io::WriteHalf;
 use tokio::net::UnixStream;
 mod column;
+mod fs_utils;
 mod tree;
 mod tree_handler;
-mod fs_utils;
 use tree_handler::TreeHandler;
 
 fn init_logging() -> Result<(), Box<dyn Error>> {
