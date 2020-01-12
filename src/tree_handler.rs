@@ -191,10 +191,51 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
         }
     }
 
-    async fn handle_notify(&self, name: String, args: Vec<Value>, _neovim: Neovim<Self::Writer>) {
-        info!("Notify: {}", name);
-        for arg in args {
-            info!("{}", arg);
+    async fn handle_notify(
+        &self,
+        name: String,
+        mut args: Vec<Value>,
+        _neovim: Neovim<Self::Writer>,
+    ) {
+        info!("Notify {}: {:?}", name, args);
+        let vl = std::mem::replace(args.get_mut(0).unwrap(), Value::Nil);
+        let mut vl = match vl {
+            Value::Array(v) => v,
+            _ => {
+                error!("Invalid argument type");
+                return;
+            }
+        };
+        info!("vl: {:?}", vl);
+        if name == "_tree_async_action" && !args.is_empty() {
+            let action = match vl[0].as_str() {
+                Some(a) => a,
+                None => {
+                    error!("action must be of string type");
+                    return;
+                }
+            };
+            info!("async action: {}", action);
+            let context = match std::mem::replace(vl.get_mut(2).unwrap(), Value::Nil) {
+                Value::Map(context_val) => {
+                    let mut r: HashMap<String, Value> = HashMap::new();
+                    for (k, v) in context_val {
+                        let key = match k {
+                            Value::String(v) => v.into_str().unwrap(),
+                            _ => {
+                                error!("Key should be of type string");
+                                return;
+                            }
+                        };
+                        r.insert(key, v);
+                    }
+                    r
+                }
+                _ => {
+                    error!("Context must be of map");
+                    return;
+                }
+            };
         }
     }
 }

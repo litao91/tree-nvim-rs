@@ -184,12 +184,13 @@ impl Config {
 
                 "columns" => {
                     self.columns.clear();
-                    for col in (match v.as_str() {
+                    for col in match v.as_str() {
                         Some(v) => v.split(":"),
                         None => {
                             return Err(Box::new(crate::errors::ArgError::new("Str type expected")))
                         }
-                    }) {
+                    } {
+                        // info!("col:{}", col);
                         self.columns.push(ColumnType::from(col));
                     }
                 }
