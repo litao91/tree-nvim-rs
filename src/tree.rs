@@ -11,7 +11,6 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::From;
 use std::future::Future;
-use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::fs;
@@ -116,48 +115,88 @@ impl Default for Config {
     }
 }
 
+fn val_to_u16(v: &Value) -> Result<u16, Box<dyn std::error::Error>> {
+    if let Some(v_str) = v.as_str() {
+        Ok(v_str.parse::<u16>()?)
+    } else {
+        match v.as_u64() {
+            Some(v) => Ok(v as u16),
+            None => Err(Box::new(crate::errors::ArgError::new("Type mismatch"))),
+        }
+    }
+}
+
+fn val_to_string(v: &Value) -> Result<String, Box<dyn std::error::Error>> {
+    if let Some(v_str) = v.as_str() {
+        Ok(v_str.to_owned())
+    } else {
+        Err(Box::new(crate::errors::ArgError::new("Type mismatch")))
+    }
+}
+
+fn val_to_bool(v: &Value) -> Result<bool, Box<dyn std::error::Error>> {
+    if let Some(v_str) = v.as_str() {
+        Ok(v_str.parse::<bool>()?)
+    } else {
+        match v.as_bool() {
+            Some(v) => Ok(v),
+            None => Err(Box::new(crate::errors::ArgError::new("Type mismatch"))),
+        }
+    }
+}
+
 impl Config {
-    pub fn update(&mut self, cfg: &HashMap<String, Value>) {
+    pub fn update(
+        &mut self,
+        cfg: &HashMap<String, Value>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // TODO: handle type mismatch
         for (k, v) in cfg {
-            let k_str = k.as_str();
-            let k_str = &k_str[1..k.len() - 1];
-            match k_str {
-                "auto_recursive_level" => {
-                    if let Some(v) = v.as_u64() {
-                        self.auto_recursive_level = v as u16
-                    } else {
-                        warn!("type mismatch for auto_recursive_level: {}", v)
-                    }
+            info!("k: {:?}, v: {:?}", k, v);
+            match k.as_str() {
+                "auto_recursive_level" => self.auto_recursive_level = val_to_u16(v)?,
+                "wincol" => self.wincol = val_to_u16(v)?,
+                "winheigth" => self.winheight = val_to_u16(v)?,
+                "winrow" => self.winrow = val_to_u16(v)?,
+                "winwidth" => self.winwidth = val_to_u16(v)?,
+                "auto_cd" => self.auto_cd = val_to_bool(v)?,
+                "listed" => self.listed = val_to_bool(v)?,
+                "new" => self.new = val_to_bool(v)?,
+                "profile" => self.profile = val_to_bool(v)?,
+                "show_ignored_files" => self.show_ignored_files = val_to_bool(v)?,
+                "toggle" => self.toggle = val_to_bool(v)?,
+                "root_marker" => self.root_marker = val_to_string(v)?,
+                "buffer_name" => self.buffer_name = val_to_string(v)?,
+                "direction" => self.direction = val_to_string(v)?,
+                "ignored_files" => self.ignored_files = val_to_string(v)?,
+                "search" => self.search = val_to_string(v)?,
+                "session_file" => self.session_file = val_to_string(v)?,
+                "sort" => self.sort = val_to_string(v)?,
+                "winrelative" => self.winrelative = val_to_string(v)?,
+                "split" => {
+                    self.split = SplitType::from(match v.as_str() {
+                        Some(s) => s,
+                        None => {
+                            return Err(Box::new(crate::errors::ArgError::new("Str type expected")))
+                        }
+                    })
                 }
-                "wincol" => self.wincol = v.as_u64().unwrap() as u16,
-                "winheigth" => self.winheight = v.as_u64().unwrap() as u16,
-                "winrow" => self.winrow = v.as_u64().unwrap() as u16,
-                "winwidth" => self.winwidth = v.as_u64().unwrap() as u16,
-                "auto_cd" => self.auto_cd = v.as_bool().unwrap(),
-                "listed" => self.listed = v.as_bool().unwrap(),
-                "new" => self.new = v.as_bool().unwrap(),
-                "profile" => self.profile = v.as_bool().unwrap(),
-                "show_ignored_files" => self.show_ignored_files = v.as_bool().unwrap(),
-                "toggle" => self.toggle = v.as_bool().unwrap(),
-                "root_marker" => self.root_marker = v.as_str().unwrap().to_owned(),
-                "buffer_name" => self.buffer_name = v.as_str().unwrap().to_owned(),
-                "direction" => self.direction = v.as_str().unwrap().to_owned(),
-                "ignored_files" => self.ignored_files = v.as_str().unwrap().to_owned(),
-                "search" => self.search = v.as_str().unwrap().to_owned(),
-                "session_file" => self.session_file = v.as_str().unwrap().to_owned(),
-                "sort" => self.sort = v.as_str().unwrap().to_owned(),
-                "winrelative" => self.winrelative = v.as_str().unwrap().to_owned(),
-                "split" => self.split = SplitType::from(v.as_str().unwrap()),
+
                 "columns" => {
                     self.columns.clear();
-                    for col in v.as_str().unwrap().split(":") {
+                    for col in (match v.as_str() {
+                        Some(v) => v.split(":"),
+                        None => {
+                            return Err(Box::new(crate::errors::ArgError::new("Str type expected")))
+                        }
+                    }) {
                         self.columns.push(ColumnType::from(col));
                     }
                 }
                 _ => error!("Unsupported member: {}", k),
             };
         }
+        Ok(())
     }
 }
 

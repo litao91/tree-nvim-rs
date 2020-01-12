@@ -53,7 +53,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         let mut tree = Tree::new(bufnr.clone(), &buf, &nvim, ns_id).await?;
         {
             let d = data.read().await;
-            tree.config.update(&d.cfg_map);
+            tree.config.update(&d.cfg_map)?;
         }
         tree.change_root(path, &nvim).await?;
 
@@ -141,7 +141,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
         mut args: Vec<Value>,
         nvim: Neovim<Self::Writer>,
     ) -> Result<Value, Value> {
-        info!("Request: {}", name);
+        info!("Request: {}, {:?}", name, args);
         let vl = match &mut args[0] {
             Value::Array(v) => v,
             _ => return Err(Value::from("Error: invalid arg type")),
@@ -164,7 +164,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                 info!("context: {:?}", context);
                 for (k, v) in context {
                     let key = match k {
-                        Value::String(v) => v.to_string(),
+                        Value::String(v) => v.into_str().unwrap(),
                         _ => return Err(Value::from(format!("Key should be of type string"))),
                     };
                     cfg_map.insert(key, v);

@@ -15,6 +15,7 @@ mod column;
 mod fs_utils;
 mod tree;
 mod tree_handler;
+mod errors;
 use tree_handler::TreeHandler;
 
 fn init_logging() -> Result<(), Box<dyn Error>> {
