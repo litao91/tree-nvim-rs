@@ -12,3 +12,54 @@ function! tree#start(paths, user_context) abort
   endif
   call tree#util#rpcrequest('_tree_start', [paths, context], v:false)
 endfunction
+
+function! tree#action(action, ...) abort
+  if &l:filetype !=# 'tree'
+    return ''
+  endif
+
+  let args = tree#util#convert2list(get(a:000, 0, []))
+  return printf(":\<C-u>call tree#call_async_action(%s, %s)\<CR>",
+        \ string(a:action), string(args))
+endfunction
+function! tree#call_action(action, ...) abort
+  if &l:filetype !=# 'tree'
+    return
+  endif
+
+  let context = tree#init#action_context()
+  let args = tree#util#convert2list(get(a:000, 0, []))
+  call tree#util#rpcrequest(
+        \ '_tree_do_action', [a:action, args, context], v:false)
+endfunction
+function! tree#call_async_action(action, ...) abort
+  if &l:filetype !=# 'tree'
+    return
+  endif
+
+  let context = tree#init#action_context()
+  let args = tree#util#convert2list(get(a:000, 0, []))
+  call tree#util#rpcrequest(
+        \ '_tree_async_action', [a:action, args, context], v:true)
+endfunction
+
+function! tree#get_candidate() abort
+  if &l:filetype !=# 'tree'
+    return {}
+  endif
+
+  return tree#util#rpcrequest('_tree_get_candidate', [], v:false)
+endfunction
+function! tree#is_directory() abort
+  return get(tree#get_candidate(), 'is_directory', v:false)
+endfunction
+function! tree#is_opened_tree() abort
+  return get(tree#get_candidate(), 'is_opened_tree', v:false)
+endfunction
+function! tree#get_context() abort
+  if &l:filetype !=# 'tree'
+    return {}
+  endif
+
+  return tree#util#rpcrequest('_tree_get_context', [], v:false)
+endfunction
