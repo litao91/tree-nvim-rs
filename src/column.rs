@@ -745,6 +745,7 @@ impl Cell {
                         }
                         hl_group = Some(icon.hl_group_name().to_owned());
                         text.push_str(icon.as_glyph_and_color().0);
+                        text.push(' ');
                     }
                 } else {
                     let extension_icon = match fileitem.extension() {
@@ -754,6 +755,7 @@ impl Cell {
                     if extension_icon != Icon::Unknonwn {
                         hl_group = Some(extension_icon.hl_group_name().to_owned());
                         text = extension_icon.as_glyph_and_color().0.to_owned();
+                        text.push(' ');
                     } else {
                         text = String::from(" ");
                         hl_group = Some(Icon::File.hl_group_name().to_owned());
