@@ -239,9 +239,23 @@ impl From<&str> for Icon {
     }
 }
 
-pub static GUI_COLORS: &[&'static str] = &[
-    "#905532", "#3AFFDB", "#689FB6", "#44788E", "#834F79", "#834F79", "#AE403F", "#F5C06F",
-    "#F09F17", "#D4843E", "#F16529", "#CB6F6F", "#EE6E73", "#8FAA54", "#31B53E", "#FFFFFF",
+pub static GUI_COLORS: &[GuiColor] = &[
+    GuiColor::BROWN,
+    GuiColor::AQUA,
+    GuiColor::BLUE,
+    GuiColor::DARKBLUE,
+    GuiColor::PURPLE,
+    GuiColor::LIGHTPURPLE,
+    GuiColor::RED,
+    GuiColor::BEIGE,
+    GuiColor::YELLOW,
+    GuiColor::ORANGE,
+    GuiColor::DARKORANGE,
+    GuiColor::PINK,
+    GuiColor::SALMON,
+    GuiColor::GREEN,
+    GuiColor::LIGHTGREEN,
+    GuiColor::WHITE,
 ];
 
 pub static ICONS: &[&[&'static str]] = &[
@@ -396,7 +410,51 @@ pub enum GuiColor {
 
 impl Into<usize> for GuiColor {
     fn into(self) -> usize {
-        self as usize
+        (self as usize) - 1
+    }
+}
+
+impl GuiColor {
+    pub fn as_color_val(&self) -> &str {
+        match *self {
+            GuiColor::BROWN => "#905532",
+            GuiColor::AQUA => "#3AFFDB",
+            GuiColor::BLUE => "#689FB6",
+            GuiColor::DARKBLUE => "#44788E",
+            GuiColor::PURPLE => "#834F79",
+            GuiColor::LIGHTPURPLE => "#834F79",
+            GuiColor::RED => "#AE403F",
+            GuiColor::BEIGE => "#F5C06F",
+            GuiColor::YELLOW => "#F09F17",
+            GuiColor::ORANGE => "#D4843E",
+            GuiColor::DARKORANGE => "#F16529",
+            GuiColor::PINK => "#CB6F6F",
+            GuiColor::SALMON => "#EE6E73",
+            GuiColor::GREEN => "#8FAA54",
+            GuiColor::LIGHTGREEN => "#31B53E",
+            GuiColor::WHITE => "#FFFFFF",
+        }
+    }
+
+    pub fn to_hl_group_name(&self) -> &str {
+        match *self {
+            GuiColor::BROWN => "tree_color_brow",
+            GuiColor::AQUA => "tree_color_aqua",
+            GuiColor::BLUE => "tree_color_blue",
+            GuiColor::DARKBLUE => "tree_color_darkblue",
+            GuiColor::PURPLE => "tree_color_purple",
+            GuiColor::LIGHTPURPLE => "tree_color_lightpurple",
+            GuiColor::RED => "tree_color_red",
+            GuiColor::BEIGE => "tree_color_beige",
+            GuiColor::YELLOW => "tree_color_yellow",
+            GuiColor::ORANGE => "tree_color_orange",
+            GuiColor::DARKORANGE => "tree_color_darkorange",
+            GuiColor::PINK => "tree_color_pink",
+            GuiColor::SALMON => "tree_color_salmon",
+            GuiColor::GREEN => "tree_color_green",
+            GuiColor::LIGHTGREEN => "tree_color_lightgreen",
+            GuiColor::WHITE => "tree_color_white",
+        }
     }
 }
 

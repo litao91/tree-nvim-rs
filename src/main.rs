@@ -12,10 +12,10 @@ use std::sync::Arc;
 use tokio::io::WriteHalf;
 use tokio::net::UnixStream;
 mod column;
+mod errors;
 mod fs_utils;
 mod tree;
 mod tree_handler;
-mod errors;
 use tree_handler::TreeHandler;
 
 fn init_logging() -> Result<(), Box<dyn Error>> {
@@ -71,7 +71,7 @@ where
     let cmd = format!(
         "hi {} guifg={}",
         &name,
-        column::GUI_COLORS[Into::<usize>::into(column::GuiColor::YELLOW)]
+        column::GuiColor::YELLOW.as_color_val()
     );
     nvim.command(&cmd).await.unwrap();
     // dir
@@ -79,7 +79,7 @@ where
     let cmd = format!(
         "hi {} guifg={}",
         &name,
-        column::GUI_COLORS[Into::<usize>::into(column::GuiColor::BLUE)]
+        column::GuiColor::BLUE.as_color_val(),
     );
     nvim.command(&cmd).await.unwrap();
 
@@ -87,7 +87,7 @@ where
     let cmd = format!(
         "hi {} guifg={}",
         &name,
-        column::GUI_COLORS[Into::<usize>::into(column::GuiColor::GREEN)]
+        column::GuiColor::GREEN.as_color_val()
     );
     nvim.command(&cmd).await.unwrap();
 
@@ -95,7 +95,7 @@ where
     let cmd = format!(
         "hi {} guifg={}",
         &name,
-        column::GUI_COLORS[Into::<usize>::into(column::GuiColor::BLUE)]
+        column::GuiColor::BLUE.as_color_val()
     );
     nvim.command(&cmd).await.unwrap();
 
@@ -107,7 +107,7 @@ where
 
     for i in 0..column::GUI_COLORS.len() {
         let name = format!("tree_{}_{}", Into::<u8>::into(column::ColumnType::MARK), i);
-        let cmd = format!("hi {} guifg={}", &name, column::GUI_COLORS[i]);
+        let cmd = format!("hi {} guifg={}", &name, column::GUI_COLORS[i].as_color_val());
         nvim.command(&cmd).await.unwrap();
     }
 

@@ -236,6 +236,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                     return;
                 }
             };
+            info!("Context: {:?}", context);
         }
     }
 }
