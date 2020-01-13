@@ -99,15 +99,20 @@ where
     );
     nvim.command(&cmd).await.unwrap();
 
-    for i in 0..column::ICONS.len() {
-        let name = format!("tree_{}_{}", Into::<u8>::into(column::ColumnType::ICON), i);
-        let cmd = format!("hi {} guifg={}", name, column::ICONS[i][1]);
+    for icon in column::ICONS {
+        let name = icon.hl_group_name();
+        let color = icon.as_glyph_and_color().1;
+        let cmd = format!("hi {} guifg={}", name, color);
         nvim.command(&cmd).await.unwrap();
     }
 
     for i in 0..column::GUI_COLORS.len() {
         let name = format!("tree_{}_{}", Into::<u8>::into(column::ColumnType::MARK), i);
-        let cmd = format!("hi {} guifg={}", &name, column::GUI_COLORS[i].as_color_val());
+        let cmd = format!(
+            "hi {} guifg={}",
+            &name,
+            column::GUI_COLORS[i].as_color_val()
+        );
         nvim.command(&cmd).await.unwrap();
     }
 
