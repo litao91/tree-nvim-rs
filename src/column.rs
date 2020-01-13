@@ -543,12 +543,6 @@ pub enum ColumnType {
     TIME,
 }
 
-impl Into<u8> for ColumnType {
-    fn into(self) -> u8 {
-        self as u8
-    }
-}
-
 impl From<&str> for ColumnType {
     fn from(s: &str) -> Self {
         match s {
@@ -583,14 +577,8 @@ pub enum GuiColor {
     WHITE,
 }
 
-impl Into<usize> for GuiColor {
-    fn into(self) -> usize {
-        (self as usize) - 1
-    }
-}
-
 impl GuiColor {
-    pub fn as_color_val(&self) -> &str {
+    pub fn color_val(&self) -> &str {
         match *self {
             GuiColor::BROWN => "#905532",
             GuiColor::AQUA => "#3AFFDB",
@@ -611,7 +599,7 @@ impl GuiColor {
         }
     }
 
-    pub fn to_hl_group_name(&self) -> &str {
+    pub fn hl_group_name(&self) -> &str {
         match *self {
             GuiColor::BROWN => "tree_color_brow",
             GuiColor::AQUA => "tree_color_aqua",
@@ -681,13 +669,13 @@ pub struct Cell {
     pub byte_start: usize,
     pub byte_end: usize,
     pub text: String,
-    pub hl_group: String,
+    pub hl_group: Option<String>,
 }
 
 impl Cell {
     pub fn new(tree: &Tree, fileitem: &FileItem, ty: ColumnType, is_root_cell: bool) -> Self {
         let mut text = String::new();
-        let mut hl_group: usize = Icon::Unknonwn.into();
+        let mut hl_group = None;
         match ty {
             ColumnType::MARK => {
                 if fileitem.metadata.permissions().readonly() {
@@ -747,11 +735,11 @@ impl Cell {
                 if fileitem.metadata.is_dir() {
                     text = String::from(" ");
                     if fileitem.opened_tree {
-                        color = Icon::FolderOpened.into();
+                        hl_group = Some(Icon::FolderOpened.hl_group_name().to_owned());
                     } else if fileitem.metadata.file_type().is_symlink() {
-                        color = Icon::FolderSymlink.into();
+                        hl_group = Some(Icon::FolderSymlink.hl_group_name().to_owned());
                     } else {
-                        color = Icon::FolderClosed.into();
+                        hl_group = Some(Icon::FolderClosed.hl_group_name().to_owned());
                     }
                 } else {
                     let extension_icon = match fileitem.extension() {
@@ -759,17 +747,16 @@ impl Cell {
                         None => Icon::Unknonwn,
                     };
                     if extension_icon != Icon::Unknonwn {
-                        let icon_idx: usize = extension_icon.into();
-                        text = String::from(ICONS[icon_idx][0]);
-                        color = icon_idx;
+                        hl_group =  Some(extension_icon.hl_group_name().to_owned());
+                        text = extension_icon.as_glyph_and_color().0.to_owned();
                     } else {
                         text = String::from(" ");
-                        color = Icon::File.into();
+                        hl_group = Some(Icon::File.hl_group_name().to_owned());
                     }
                 }
             }
             ColumnType::FILENAME => {
-                color = GuiColor::YELLOW.into();
+                hl_group = Some(GuiColor::YELLOW.hl_group_name().to_owned());
                 if is_root_cell {
                     text = tree.config.root_marker.clone();
                     text.push_str(fileitem.path.to_str().unwrap());
@@ -777,7 +764,7 @@ impl Cell {
                     text = String::from(fileitem.path.file_name().and_then(OsStr::to_str).unwrap());
                     if fileitem.metadata.is_dir() {
                         text.push('/');
-                        color = GuiColor::BLUE.into();
+                        hl_group = Some(GuiColor::BLUE.hl_group_name());
                     }
                 }
             }
@@ -790,7 +777,7 @@ impl Cell {
             byte_start: 0,
             byte_end: 0,
             text,
-            color,
+            hl_group,
         }
     }
 }

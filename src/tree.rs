@@ -432,20 +432,7 @@ impl Tree {
             let fileitem = &self.fileitems[i];
             for col in &self.config.columns {
                 let cell = &self.col_map.get(col).unwrap()[i];
-                let col_u8 = Into::<u8>::into(col.clone());
-                let hl_group = match *col {
-                    ColumnType::FILENAME => Some(format!(
-                        "tree_{}_{}",
-                        col_u8,
-                        if fileitem.metadata.is_dir() { 1 } else { 0 }
-                    )),
-                    ColumnType::ICON | ColumnType::GIT | ColumnType::MARK => {
-                        Some(format!("tree_{}_{}", col_u8, cell.color))
-                    }
-                    ColumnType::SIZE | ColumnType::TIME => Some(format!("tree_{}", col_u8)),
-                    _ => None,
-                };
-                if let Some(hl_group) = hl_group {
+                if let Some(hl_group) = cell.hl_group {
                     buf.add_highlight(
                         self.icon_ns_id,
                         &hl_group,
