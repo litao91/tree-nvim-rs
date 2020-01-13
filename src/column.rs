@@ -532,7 +532,7 @@ pub static GIT_INDICATORS: &[&[&'static str]] = &[
 static READ_ONLY_ICON: &'static str = "✗";
 static SELECTED_ICON: &'static str = "✓";
 
-#[derive(PartialEq, Eq, Clone, Hash)]
+#[derive(PartialEq, Eq, Clone, Hash, Debug)]
 pub enum ColumnType {
     MARK,
     INDENT,
@@ -663,6 +663,7 @@ impl FileItem {
     }
 }
 
+#[derive(Debug)]
 pub struct Cell {
     pub col_start: usize,
     pub col_end: usize,

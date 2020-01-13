@@ -8,15 +8,93 @@ use std::collections::LinkedList;
 use std::convert::From;
 use std::sync::Arc;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TreeHandlerData {
     cfg_map: HashMap<String, Value>,
     trees: HashMap<(i8, Vec<u8>), Tree>,
     treebufs: LinkedList<(i8, Vec<u8>)>, // recently used order
     // buffer: Option<Buffer<<TreeHandler as Handler>::Writer>>,
     buf_count: u32,
-    pref_bufnr: Option<(i8, Vec<u8>)>,
+    prev_bufnr: Option<(i8, Vec<u8>)>,
+
+    cursor: u64,
+    drives: Vec<String>,
+    prev_winid: u64,
+    visual_start: u64,
+    visual_end: u64,
 }
+
+impl TreeHandlerData {
+    pub fn update(&mut self, key: &str, val: Value) {
+        match key {
+            "prev_bufnr" => match val {
+                Value::Integer(v) => {
+                    self.prev_bufnr = Some((0, vec![v.as_u64().unwrap() as u8]));
+                }
+                Value::Ext(v1, v2) => self.prev_bufnr = Some((v1, v2)),
+                _ => {
+                    error!("Unknown value: {}", val);
+                }
+            },
+            "cursor" => match val {
+                Value::Integer(v) => {
+                    self.cursor = if let Some(v) = v.as_u64() {
+                        v
+                    } else {
+                        error!("Can't convert value {} to u64", val);
+                        return;
+                    }
+                }
+                _ => {
+                    error!("Unknown value: {}", val);
+                }
+            },
+            "prev_winid" => match val {
+                Value::Integer(v) => {
+                    self.prev_winid = if let Some(v) = v.as_u64() {
+                        v
+                    } else {
+                        error!("Can't convert value {} to u64", val);
+                        return;
+                    }
+                }
+                _ => {
+                    error!("Unknown value: {}", val);
+                }
+            },
+            "visual_start" => match val {
+                Value::Integer(v) => {
+                    self.visual_start = if let Some(v) = v.as_u64() {
+                        v
+                    } else {
+                        error!("Can't convert value {} to u64", val);
+                        return;
+                    }
+                }
+                _ => {
+                    error!("Unknown value: {}", val);
+                }
+            },
+            "visual_end" => match val {
+                Value::Integer(v) => {
+                    self.visual_end = if let Some(v) = v.as_u64() {
+                        v
+                    } else {
+                        error!("Can't convert value {} to u64", val);
+                        return;
+                    }
+                }
+                _ => {
+                    error!("Unknown value: {}", val);
+                }
+            },
+            _ => {
+                warn!("Unsupported member: {}", key);
+            }
+        }
+    }
+}
+
 type TreeHandlerDataPtr = Arc<RwLock<TreeHandlerData>>;
 
 pub struct TreeHandler<W: AsyncWrite + Send + Sync + Unpin + 'static> {
@@ -76,7 +154,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             let mut d = data.write().await;
             d.trees.insert(bufnr.clone(), tree);
             d.treebufs.push_front(bufnr.clone());
-            d.pref_bufnr = Some(bufnr.clone());
+            d.prev_bufnr = Some(bufnr.clone());
         }
         nvim.execute_lua("resume(...)", vec![Value::Ext(bufnr.0, bufnr.1), tree_cfg])
             .await?;
@@ -216,9 +294,8 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                 }
             };
             info!("async action: {}", action);
-            let context = match std::mem::replace(vl.get_mut(2).unwrap(), Value::Nil) {
+            match std::mem::replace(vl.get_mut(2).unwrap(), Value::Nil) {
                 Value::Map(context_val) => {
-                    let mut r: HashMap<String, Value> = HashMap::new();
                     for (k, v) in context_val {
                         let key = match k {
                             Value::String(v) => v.into_str().unwrap(),
@@ -227,16 +304,15 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                                 return;
                             }
                         };
-                        r.insert(key, v);
+                        let mut d = self.data.write().await;
+                        d.update(&key, v);
                     }
-                    r
                 }
                 _ => {
                     error!("Context must be of map");
                     return;
                 }
             };
-            info!("Context: {:?}", context);
         }
     }
 }

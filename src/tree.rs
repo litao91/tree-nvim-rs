@@ -15,7 +15,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::fs;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SplitType {
     Vertical,
     Horizontal,
@@ -50,6 +50,7 @@ impl From<&str> for SplitType {
 }
 
 // State parameters for Tree
+#[derive(Debug)]
 pub struct Config {
     pub auto_cd: bool,
     pub auto_recursive_level: u16,
@@ -203,6 +204,7 @@ impl Config {
 
 const KSTOP: usize = 90;
 
+#[derive(Debug)]
 pub struct Tree {
     pub bufnr: (i8, Vec<u8>), // use bufnr to avoid tedious generic code
     pub icon_ns_id: i64,
