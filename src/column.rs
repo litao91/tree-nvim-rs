@@ -734,12 +734,17 @@ impl Cell {
             ColumnType::ICON => {
                 if fileitem.metadata.is_dir() {
                     text = String::from(" ");
-                    if fileitem.opened_tree {
-                        hl_group = Some(Icon::FolderOpened.hl_group_name().to_owned());
-                    } else if fileitem.metadata.file_type().is_symlink() {
-                        hl_group = Some(Icon::FolderSymlink.hl_group_name().to_owned());
-                    } else {
-                        hl_group = Some(Icon::FolderClosed.hl_group_name().to_owned());
+                    if !is_root_cell {
+                        let icon;
+                        if fileitem.opened_tree {
+                            icon = Icon::FolderOpened;
+                        } else if fileitem.metadata.file_type().is_symlink() {
+                            icon = Icon::FolderSymlink;
+                        } else {
+                            icon = Icon::FolderClosed;
+                        }
+                        hl_group = Some(icon.hl_group_name().to_owned());
+                        text.push_str(icon.as_glyph_and_color().0);
                     }
                 } else {
                     let extension_icon = match fileitem.extension() {
@@ -747,7 +752,7 @@ impl Cell {
                         None => Icon::Unknonwn,
                     };
                     if extension_icon != Icon::Unknonwn {
-                        hl_group =  Some(extension_icon.hl_group_name().to_owned());
+                        hl_group = Some(extension_icon.hl_group_name().to_owned());
                         text = extension_icon.as_glyph_and_color().0.to_owned();
                     } else {
                         text = String::from(" ");
