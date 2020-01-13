@@ -66,38 +66,6 @@ where
         .await
         .unwrap();
     info!("Set chan to {} done!", chan);
-    // file
-    let name = format!("tree_{}_0", Into::<u8>::into(column::ColumnType::FILENAME));
-    let cmd = format!(
-        "hi {} guifg={}",
-        &name,
-        column::GuiColor::YELLOW.as_color_val()
-    );
-    nvim.command(&cmd).await.unwrap();
-    // dir
-    let name = format!("tree_{}_1", Into::<u8>::into(column::ColumnType::FILENAME));
-    let cmd = format!(
-        "hi {} guifg={}",
-        &name,
-        column::GuiColor::BLUE.as_color_val(),
-    );
-    nvim.command(&cmd).await.unwrap();
-
-    let name = format!("tree_{}", Into::<u8>::into(column::ColumnType::SIZE));
-    let cmd = format!(
-        "hi {} guifg={}",
-        &name,
-        column::GuiColor::GREEN.as_color_val()
-    );
-    nvim.command(&cmd).await.unwrap();
-
-    let name = format!("tree_{}", Into::<u8>::into(column::ColumnType::TIME));
-    let cmd = format!(
-        "hi {} guifg={}",
-        &name,
-        column::GuiColor::BLUE.as_color_val()
-    );
-    nvim.command(&cmd).await.unwrap();
 
     for icon in column::ICONS {
         let name = icon.hl_group_name();
@@ -106,19 +74,12 @@ where
         nvim.command(&cmd).await.unwrap();
     }
 
-    for i in 0..column::GUI_COLORS.len() {
-        let name = format!("tree_{}_{}", Into::<u8>::into(column::ColumnType::MARK), i);
+    for color in column::GUI_COLORS {
         let cmd = format!(
             "hi {} guifg={}",
-            &name,
-            column::GUI_COLORS[i].as_color_val()
+            color.hl_group_name(),
+            color.color_val(),
         );
-        nvim.command(&cmd).await.unwrap();
-    }
-
-    for i in 0..column::GIT_INDICATORS.len() {
-        let name = format!("tree_{}_{}", Into::<u8>::into(column::ColumnType::GIT), i);
-        let cmd = format!("hi {} guifg={}", &name, column::GIT_INDICATORS[i][1]);
         nvim.command(&cmd).await.unwrap();
     }
 }

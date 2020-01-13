@@ -432,10 +432,10 @@ impl Tree {
             let fileitem = &self.fileitems[i];
             for col in &self.config.columns {
                 let cell = &self.col_map.get(col).unwrap()[i];
-                if let Some(hl_group) = cell.hl_group {
+                if let Some(hl_group) = &cell.hl_group {
                     buf.add_highlight(
                         self.icon_ns_id,
-                        &hl_group,
+                        hl_group,
                         i as i64,
                         cell.byte_start as i64,
                         (cell.byte_start + cell.text.len()) as i64,

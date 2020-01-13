@@ -3,7 +3,7 @@ use std::convert::From;
 use std::ffi::OsStr;
 use std::fs::Metadata;
 #[derive(Eq, PartialEq, Clone)]
-enum Icon {
+pub enum Icon {
     FolderClosed,
     FolderOpened,
     FolderSymlink,
@@ -764,7 +764,7 @@ impl Cell {
                     text = String::from(fileitem.path.file_name().and_then(OsStr::to_str).unwrap());
                     if fileitem.metadata.is_dir() {
                         text.push('/');
-                        hl_group = Some(GuiColor::BLUE.hl_group_name());
+                        hl_group = Some(String::from(GuiColor::BLUE.hl_group_name()));
                     }
                 }
             }
