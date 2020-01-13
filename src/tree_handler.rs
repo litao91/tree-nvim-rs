@@ -1,3 +1,4 @@
+use crate::tree::Context;
 use crate::tree::Tree;
 use async_std::sync::RwLock;
 use async_trait::async_trait;
@@ -15,84 +16,7 @@ pub struct TreeHandlerData {
     treebufs: LinkedList<(i8, Vec<u8>)>, // recently used order
     // buffer: Option<Buffer<<TreeHandler as Handler>::Writer>>,
     buf_count: u32,
-    prev_bufnr: Option<(i8, Vec<u8>)>,
-
-    cursor: u64,
-    drives: Vec<String>,
-    prev_winid: u64,
-    visual_start: u64,
-    visual_end: u64,
-}
-
-impl TreeHandlerData {
-    pub fn update(&mut self, key: &str, val: Value) {
-        match key {
-            "prev_bufnr" => match val {
-                Value::Integer(v) => {
-                    self.prev_bufnr = Some((0, vec![v.as_u64().unwrap() as u8]));
-                }
-                Value::Ext(v1, v2) => self.prev_bufnr = Some((v1, v2)),
-                _ => {
-                    error!("Unknown value: {}", val);
-                }
-            },
-            "cursor" => match val {
-                Value::Integer(v) => {
-                    self.cursor = if let Some(v) = v.as_u64() {
-                        v
-                    } else {
-                        error!("Can't convert value {} to u64", val);
-                        return;
-                    }
-                }
-                _ => {
-                    error!("Unknown value: {}", val);
-                }
-            },
-            "prev_winid" => match val {
-                Value::Integer(v) => {
-                    self.prev_winid = if let Some(v) = v.as_u64() {
-                        v
-                    } else {
-                        error!("Can't convert value {} to u64", val);
-                        return;
-                    }
-                }
-                _ => {
-                    error!("Unknown value: {}", val);
-                }
-            },
-            "visual_start" => match val {
-                Value::Integer(v) => {
-                    self.visual_start = if let Some(v) = v.as_u64() {
-                        v
-                    } else {
-                        error!("Can't convert value {} to u64", val);
-                        return;
-                    }
-                }
-                _ => {
-                    error!("Unknown value: {}", val);
-                }
-            },
-            "visual_end" => match val {
-                Value::Integer(v) => {
-                    self.visual_end = if let Some(v) = v.as_u64() {
-                        v
-                    } else {
-                        error!("Can't convert value {} to u64", val);
-                        return;
-                    }
-                }
-                _ => {
-                    error!("Unknown value: {}", val);
-                }
-            },
-            _ => {
-                warn!("Unsupported member: {}", key);
-            }
-        }
-    }
+    ctx: Context,
 }
 
 type TreeHandlerDataPtr = Arc<RwLock<TreeHandlerData>>;
@@ -154,7 +78,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             let mut d = data.write().await;
             d.trees.insert(bufnr.clone(), tree);
             d.treebufs.push_front(bufnr.clone());
-            d.prev_bufnr = Some(bufnr.clone());
+            d.ctx.prev_bufnr = Some(bufnr.clone());
         }
         nvim.execute_lua("resume(...)", vec![Value::Ext(bufnr.0, bufnr.1), tree_cfg])
             .await?;
@@ -273,7 +197,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
         &self,
         name: String,
         mut args: Vec<Value>,
-        _neovim: Neovim<Self::Writer>,
+        neovim: Neovim<Self::Writer>,
     ) {
         info!("Notify {}: {:?}", name, args);
         let vl = std::mem::replace(args.get_mut(0).unwrap(), Value::Nil);
@@ -286,15 +210,12 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
         };
         info!("vl: {:?}", vl);
         if name == "_tree_async_action" && !args.is_empty() {
-            let action = match vl[0].as_str() {
-                Some(a) => a,
-                None => {
-                    error!("action must be of string type");
-                    return;
-                }
-            };
-            info!("async action: {}", action);
-            match std::mem::replace(vl.get_mut(2).unwrap(), Value::Nil) {
+            if vl.len() != 3 {
+                error!("Arg num should be 3 but got {}", vl.len());
+            }
+
+            // 3rd update context
+            match vl.pop().unwrap() {
                 Value::Map(context_val) => {
                     for (k, v) in context_val {
                         let key = match k {
@@ -305,7 +226,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                             }
                         };
                         let mut d = self.data.write().await;
-                        d.update(&key, v);
+                        d.ctx.update(&key, v);
                     }
                 }
                 _ => {
@@ -313,6 +234,26 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                     return;
                 }
             };
+            // 2nd
+            let act_args = vl.pop().unwrap();
+
+            let action = match vl.pop().unwrap() {
+                Value::String(a) => a.into_str().unwrap(),
+                _ => {
+                    error!("action must be of string type");
+                    return;
+                }
+            };
+
+            info!("async action: {}", action);
+
+            let mut d = self.data.write().await;
+            let ctx = d.ctx.clone();
+            if let Some(bufnr) = d.ctx.prev_bufnr.clone() {
+                if let Some(tree) = d.trees.get_mut(&bufnr) {
+                    tree.action(&neovim, &action, act_args, ctx).await;
+                }
+            }
         }
     }
 }

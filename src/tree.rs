@@ -15,6 +15,87 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::fs;
 
+#[derive(Default, Debug, Clone)]
+pub struct Context {
+    pub cursor: u64,
+    pub drives: Vec<String>,
+    pub prev_winid: u64,
+    pub visual_start: u64,
+    pub visual_end: u64,
+    pub prev_bufnr: Option<(i8, Vec<u8>)>,
+}
+
+impl Context {
+    pub fn update(&mut self, key: &str, val: Value) {
+        match key {
+            "prev_bufnr" => match val {
+                Value::Integer(v) => {
+                    self.prev_bufnr = Some((0, vec![v.as_u64().unwrap() as u8]));
+                }
+                Value::Ext(v1, v2) => self.prev_bufnr = Some((v1, v2)),
+                _ => {
+                    error!("Unknown value: {}", val);
+                }
+            },
+            "cursor" => match val {
+                Value::Integer(v) => {
+                    self.cursor = if let Some(v) = v.as_u64() {
+                        v
+                    } else {
+                        error!("Can't convert value {} to u64", val);
+                        return;
+                    }
+                }
+                _ => {
+                    error!("Unknown value: {}", val);
+                }
+            },
+            "prev_winid" => match val {
+                Value::Integer(v) => {
+                    self.prev_winid = if let Some(v) = v.as_u64() {
+                        v
+                    } else {
+                        error!("Can't convert value {} to u64", val);
+                        return;
+                    }
+                }
+                _ => {
+                    error!("Unknown value: {}", val);
+                }
+            },
+            "visual_start" => match val {
+                Value::Integer(v) => {
+                    self.visual_start = if let Some(v) = v.as_u64() {
+                        v
+                    } else {
+                        error!("Can't convert value {} to u64", val);
+                        return;
+                    }
+                }
+                _ => {
+                    error!("Unknown value: {}", val);
+                }
+            },
+            "visual_end" => match val {
+                Value::Integer(v) => {
+                    self.visual_end = if let Some(v) = v.as_u64() {
+                        v
+                    } else {
+                        error!("Can't convert value {} to u64", val);
+                        return;
+                    }
+                }
+                _ => {
+                    error!("Unknown value: {}", val);
+                }
+            },
+            _ => {
+                warn!("Unsupported member: {}", key);
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum SplitType {
     Vertical,
@@ -215,6 +296,7 @@ pub struct Tree {
     col_map: HashMap<ColumnType, Vec<Cell>>,
     targets: Vec<usize>,
     cursor_history: HashMap<String, i64>,
+    ctx: Context,
 }
 impl Tree {
     pub async fn new<W: AsyncWrite + Send + Sync + Unpin + 'static>(
@@ -238,7 +320,58 @@ impl Tree {
             col_map: Default::default(),
             targets: Default::default(),
             cursor_history: Default::default(),
+            ctx: Default::default(),
         })
+    }
+    pub async fn action<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        action: &str,
+        args: Value,
+        ctx: Context,
+    ) {
+        info!(
+            "Action: {:?}, \n args: {:?}, \n ctx: {:?}",
+            action, args, ctx
+        );
+        self.ctx = ctx.clone();
+        match action {
+            "drop" => self.drop(nvim, args).await,
+            _=> error!("Unknown action: {}", action),
+        }
+    }
+    pub async fn drop<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        args: Value,
+    ) {
+        let info: String;
+        let should_change_root;
+        if let Some(cur) = self.fileitems.get(self.ctx.cursor as usize - 1) {
+            info = cur.path.to_str().unwrap().to_owned();
+            if cur.metadata.is_dir() {
+                should_change_root = true;
+            } else {
+                should_change_root = false;
+            }
+        } else {
+            error!("drop: invalid cursor position");
+            return;
+        }
+        if should_change_root {
+            match self.change_root(&info, nvim).await {
+                Ok(_) => {}
+                Err(e) => error!("Error changing root: {:?}", e),
+            }
+        } else {
+            match nvim
+                .execute_lua("drop(...)", vec![args, Value::from(info)])
+                .await
+            {
+                Ok(_) => {}
+                Err(e) => error!("Error: {:?}", e),
+            }
+        }
     }
     pub fn get_fileitem(&self, idx: usize) -> &FileItem {
         &self.fileitems[idx]
