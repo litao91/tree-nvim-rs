@@ -388,7 +388,11 @@ impl Tree {
             return Ok(());
         }
         let root_path = fs::canonicalize(path).await?;
-        let root_path_str = root_path.to_str().unwrap();
+        let root_path_str = if let Some(p) = root_path.to_str() {
+            p
+        } else {
+            return Err(Box::new(ArgError::from_string(format!("Invalid path {:?}", root_path))));
+        };
         let last_cursor = match self.cursor_history.get(root_path_str) {
             Some(v) => Some(*v),
             None => None,
@@ -398,25 +402,17 @@ impl Tree {
         // TODO: update git map
         self.targets.clear();
         self.col_map.clear();
+        self.fileitems.clear();
 
         let filemeta = fs::metadata(root_path_str).await?;
         let mut fileitems = vec![Arc::new(FileItem::new(root_path, filemeta, 0))];
         self.entry_info_recursively(fileitems[0].clone(), &mut fileitems, 1)
             .await?;
-        // self.fileitems = fileitems;
+        self.insert_items_and_cells(0, fileitems)?;
 
-        // make line for each file item.
-        // first the root cell
-        self.insert_cells(0, true);
-        let mut ret = Vec::new();
-        ret.push(self.makeline(0));
-
-        // then the cells below
-        for pos in 1..self.fileitems.len() {
-            self.insert_cells(pos, false);
-            ret.push(self.makeline(pos));
-        }
-
+        let ret = (0..self.fileitems.len())
+            .map(|i| self.makeline(i))
+            .collect();
         self.buf_set_lines(nvim, 0, -1, true, ret).await?;
         if let Some(v) = last_cursor {
             let win = Window::new(Value::from(0), nvim.clone());
@@ -474,11 +470,11 @@ impl Tree {
         &mut self,
         pos: usize,
         items: Vec<FileItemPtr>,
-        is_first_item_root: bool,
     ) -> Result<(), ArgError> {
-        if pos >= self.fileitems.len() {
+        if pos > self.fileitems.len() {
             return Err(ArgError::new("pos larger than the fileitem size"));
         }
+        let is_first_item_root = pos == 0;
         // make cells
         let cells = self.make_cells(&items, is_first_item_root);
         // insert items
