@@ -75,11 +75,7 @@ where
     }
 
     for color in column::GUI_COLORS {
-        let cmd = format!(
-            "hi {} guifg={}",
-            color.hl_group_name(),
-            color.color_val(),
-        );
+        let cmd = format!("hi {} guifg={}", color.hl_group_name(), color.color_val(),);
         nvim.command(&cmd).await.unwrap();
     }
 }

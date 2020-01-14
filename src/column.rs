@@ -656,7 +656,7 @@ impl FileItem {
             selected: false,
             parent: None,
             last: false,
-            id
+            id,
         }
     }
 

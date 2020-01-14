@@ -391,7 +391,10 @@ impl Tree {
         let root_path_str = if let Some(p) = root_path.to_str() {
             p
         } else {
-            return Err(Box::new(ArgError::from_string(format!("Invalid path {:?}", root_path))));
+            return Err(Box::new(ArgError::from_string(format!(
+                "Invalid path {:?}",
+                root_path
+            ))));
         };
         let last_cursor = match self.cursor_history.get(root_path_str) {
             Some(v) => Some(*v),
