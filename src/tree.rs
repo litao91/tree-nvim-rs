@@ -466,12 +466,17 @@ impl Tree {
         let ft = self.fileitems.get(idx).unwrap();
         info!("get context of: {:?}", ft.path);
         Value::Map(vec![
-            (Value::from("is_directory"), Value::from(ft.metadata.is_dir())),
-            (Value::from("is_opened_tree"), Value::from(self.is_item_opened(ft.path.to_str().unwrap()))),
-            (Value::from("level"), Value::from(ft.level))
+            (
+                Value::from("is_directory"),
+                Value::from(ft.metadata.is_dir()),
+            ),
+            (
+                Value::from("is_opened_tree"),
+                Value::from(self.is_item_opened(ft.path.to_str().unwrap())),
+            ),
+            (Value::from("level"), Value::from(ft.level)),
         ])
     }
-
 
     pub fn get_fileitem(&self, idx: usize) -> &FileItem {
         &self.fileitems[idx]

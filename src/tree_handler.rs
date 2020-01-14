@@ -213,7 +213,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                         return Err(Value::from(format!("Type for current line error")));
                     }
                 };
-                info!("bufnr: {:?}, cursor {}",  bufnr, cursor);
+                info!("bufnr: {:?}, cursor {}", bufnr, cursor);
                 let d = self.data.read().await;
                 if let Some(tree) = d.trees.get(&bufnr) {
                     Ok(Value::from(tree.get_context_value(cursor)))
