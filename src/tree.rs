@@ -300,6 +300,12 @@ pub struct Tree {
     ctx: Context,
 }
 impl Tree {
+    pub fn is_item_opened(&self, path: &str) -> bool {
+        match self.expand_store.get(path) {
+            Some(v) => *v,
+            None => false,
+        }
+    }
     pub async fn new<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         bufnr: (i8, Vec<u8>),
         buf: &Buffer<W>,
@@ -380,24 +386,90 @@ impl Tree {
     pub async fn action_open_directory<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
         nvim: &Neovim<W>,
-        args: Value,
+        _args: Value,
     ) {
-        let cur = match self.fileitems.get_mut(self.ctx.cursor as usize - 1) {
-            Some(v) => v,
+        let idx = self.ctx.cursor as usize - 1;
+        let cur = match self.fileitems.get(idx) {
+            Some(fi) => fi,
             None => {
-                error!("Invalid line cursor positoin: {}", self.ctx.cursor);
+                error!("Index out of bound: {}", idx);
+                return;
+            }
+        }
+        .clone();
+        let root_path = match cur.path.to_str() {
+            Some(path) => path,
+            None => {
+                error!("filename error");
                 return;
             }
         };
-        if cur.metadata.is_dir() && !cur.dir_opened {
-            unsafe {}
+        let is_opened = match self.expand_store.get(root_path) {
+            Some(v) => *v,
+            None => false,
+        };
+        if cur.metadata.is_dir() && !is_opened {
+            let mut child_fileitem = Vec::new();
+            match self
+                .entry_info_recursively(cur.clone(), &mut child_fileitem, idx + 1)
+                .await
+            {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("Err: {:?}", e);
+                    return;
+                }
+            }
+            let child_item_size = child_fileitem.len();
+            match self.insert_items_and_cells(idx + 1, child_fileitem) {
+                Ok(_) => {}
+                Err(e) => error!("Err: {:?}", e),
+            };
+            self.expand_store.insert(root_path.to_owned(), true);
+            // icon should be open
+            self.update_cells(idx, idx + 1);
+            // update lines
+            let end = idx + child_item_size;
+            let ret = (idx..end).map(|i| self.makeline(i)).collect();
+            match self
+                .buf_set_lines(nvim, idx as i64, (idx + 1) as i64, true, ret)
+                .await
+            {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("{:?}", e);
+                    return;
+                }
+            }
+            match self
+                .hl_lines(&nvim, idx, idx + 1 + child_item_size)
+                .await
+            {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("{:?}", e);
+                    return;
+                }
+            }
         }
     }
+
+    pub fn update_cells(&mut self, sl: usize, el: usize) {
+        let cells = self.make_cells(&self.fileitems[sl..el], sl == 0);
+        for (col, cells) in cells {
+            if !self.col_map.contains_key(&col) {
+                self.col_map.insert(col.clone(), Vec::new());
+            }
+            self.col_map.get_mut(&col).unwrap().splice(sl..el, cells);
+        }
+    }
+
     pub fn get_fileitem(&self, idx: usize) -> &FileItem {
         &self.fileitems[idx]
     }
-    pub unsafe fn get_fileitem_mut(&self, idx: usize) -> &mut FileItem {
-        &mut *(self.fileitems[idx].as_ref() as *const FileItem as *mut FileItem)
+    // TODO: use unsafe or mutex?
+    pub unsafe fn get_fileitem_mut(&self, idx: usize) -> Option<&mut FileItem> {
+        Some(&mut *(self.fileitems.get(idx)?.as_ref() as *const FileItem as *mut FileItem))
     }
     pub async fn change_root<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
@@ -626,7 +698,6 @@ impl Tree {
                 i += 1;
                 if let Some(expand) = self.expand_store.get(fileitem.path.to_str().unwrap()) {
                     if *expand {
-                        fileitem.dir_opened = true;
                         fileitem_lst.push(Arc::new(fileitem));
                         start_id = self
                             .entry_info_recursively(item.clone(), fileitem_lst, start_id)

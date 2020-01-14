@@ -637,7 +637,6 @@ pub struct FileItem {
     pub path: std::path::PathBuf,
     pub metadata: Metadata,
     pub level: usize,
-    pub dir_opened: bool,
     pub selected: bool,
     pub parent: Option<FileItemPtr>, // the index of the parent in the Tree::fileitems
     pub last: bool,
@@ -652,7 +651,6 @@ impl FileItem {
             path,
             metadata,
             level: 0,
-            dir_opened: false,
             selected: false,
             parent: None,
             last: false,
@@ -737,9 +735,13 @@ impl Cell {
             ColumnType::ICON => {
                 if fileitem.metadata.is_dir() {
                     text = String::from(" ");
+                    let dir_opened = match fileitem.path.to_str() {
+                        Some(p) => tree.is_item_opened(p),
+                        None => false,
+                    };
                     if !is_root_cell {
                         let icon;
-                        if fileitem.dir_opened {
+                        if dir_opened {
                             icon = Icon::FolderOpened;
                         } else if fileitem.metadata.file_type().is_symlink() {
                             icon = Icon::FolderSymlink;
