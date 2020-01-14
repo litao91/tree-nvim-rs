@@ -144,21 +144,21 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
         nvim: Neovim<Self::Writer>,
     ) -> Result<Value, Value> {
         info!("Request: {}, {:?}", name, args);
-        let vl = match &mut args[0] {
-            Value::Array(v) => v,
-            _ => return Err(Value::from("Error: invalid arg type")),
-        };
-        let context = match vl.pop() {
-            Some(Value::Map(v)) => v,
-            _ => return Err(Value::from("Error: invalid arg type")),
-        };
-        let method_args = match vl.pop() {
-            Some(Value::Array(v)) => v,
-            _ => return Err(Value::from("Error: invalid arg type")),
-        };
 
         match name.as_ref() {
             "_tree_start" => {
+                let vl = match &mut args[0] {
+                    Value::Array(v) => v,
+                    _ => return Err(Value::from("Error: invalid arg type")),
+                };
+                let context = match vl.pop() {
+                    Some(Value::Map(v)) => v,
+                    _ => return Err(Value::from("Error: invalid arg type")),
+                };
+                let method_args = match vl.pop() {
+                    Some(Value::Array(v)) => v,
+                    _ => return Err(Value::from("Error: invalid arg type")),
+                };
                 if args.len() <= 0 {
                     return Err(Value::from("Error: path is required for _tree_start"));
                 }
@@ -188,6 +188,38 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                 });
 
                 Ok(Value::Nil)
+            }
+            "_tree_get_candidate" => {
+                let buf = match nvim.get_current_buf().await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return Err(Value::from(format!("Can't get current buffer: {:?}", e)));
+                    }
+                };
+                let bufnr = match buf.get_value() {
+                    Value::Ext(v0, v1) => (*v0, v1.clone()),
+                    _ => {
+                        return Err(Value::from(format!("Type for current buffer error")));
+                    }
+                };
+                let cursor = match nvim.call_function("line", vec![Value::from(".")]).await {
+                    Ok(Value::Integer(v)) => match v.as_u64() {
+                        Some(i) => i as usize,
+                        None => {
+                            return Err(Value::from(format!("Type for current line error")));
+                        }
+                    },
+                    _ => {
+                        return Err(Value::from(format!("Type for current line error")));
+                    }
+                };
+                info!("bufnr: {:?}, cursor {}",  bufnr, cursor);
+                let d = self.data.read().await;
+                if let Some(tree) = d.trees.get(&bufnr) {
+                    Ok(Value::from(tree.get_context_value(cursor)))
+                } else {
+                    Err(Value::from("Can't find view"))
+                }
             }
             _ => Err(Value::from(format!("Unknown method: {}", name))),
         }

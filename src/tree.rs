@@ -424,18 +424,10 @@ impl Tree {
             // icon should be open
             self.update_cells(idx, idx + 1);
             let child_item_size = child_fileitem.len();
-            info!("Before insert");
-            for f in &self.fileitems {
-                info!("name:{:?}, id: {}, level: {}", f.path.file_name(), f.id, f.level);
-            }
             match self.insert_items_and_cells(idx + 1, child_fileitem) {
                 Ok(_) => {}
                 Err(e) => error!("Err: {:?}", e),
             };
-            info!("AFter insert");
-            for f in &self.fileitems {
-                info!("name:{:?}, id: {}, level: {}", f.path.file_name(), f.id, f.level);
-            }
             // update lines
             let end = idx + child_item_size + 1;
             let ret = (idx..end).map(|i| self.makeline(i)).collect();
@@ -449,10 +441,7 @@ impl Tree {
                     return;
                 }
             }
-            match self
-                .hl_lines(&nvim, idx, idx + 1 + child_item_size)
-                .await
-            {
+            match self.hl_lines(&nvim, idx, idx + 1 + child_item_size).await {
                 Ok(_) => {}
                 Err(e) => {
                     error!("{:?}", e);
@@ -471,6 +460,18 @@ impl Tree {
             self.col_map.get_mut(&col).unwrap().splice(sl..el, cells);
         }
     }
+
+    pub fn get_context_value(&self, cursor: usize) -> Value {
+        let idx = cursor - 1;
+        let ft = self.fileitems.get(idx).unwrap();
+        info!("get context of: {:?}", ft.path);
+        Value::Map(vec![
+            (Value::from("is_directory"), Value::from(ft.metadata.is_dir())),
+            (Value::from("is_opened_tree"), Value::from(self.is_item_opened(ft.path.to_str().unwrap()))),
+            (Value::from("level"), Value::from(ft.level))
+        ])
+    }
+
 
     pub fn get_fileitem(&self, idx: usize) -> &FileItem {
         &self.fileitems[idx]
