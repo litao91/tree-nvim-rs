@@ -641,12 +641,13 @@ pub struct FileItem {
     pub selected: bool,
     pub parent: Option<FileItemPtr>, // the index of the parent in the Tree::fileitems
     pub last: bool,
+    pub id: usize,
     // pub git_map: HashMap<String, GitStatus>,
 }
 pub type FileItemPtr = std::sync::Arc<FileItem>;
 
 impl FileItem {
-    pub fn new(path: std::path::PathBuf, metadata: Metadata) -> Self {
+    pub fn new(path: std::path::PathBuf, metadata: Metadata, id: usize) -> Self {
         Self {
             path,
             metadata,
@@ -655,6 +656,7 @@ impl FileItem {
             selected: false,
             parent: None,
             last: false,
+            id
         }
     }
 

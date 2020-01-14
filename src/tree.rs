@@ -1,5 +1,7 @@
+#![feature(get_mut_unchecked)]
 use crate::column::ColumnType;
 use crate::column::{Cell, FileItem, FileItemPtr, GitStatus};
+use crate::errors::ArgError;
 use crate::fs_utils;
 use log::*;
 use nvim_rs::{
@@ -337,7 +339,7 @@ impl Tree {
         self.ctx = ctx.clone();
         match action {
             "drop" => self.drop(nvim, args).await,
-            _=> error!("Unknown action: {}", action),
+            _ => error!("Unknown action: {}", action),
         }
     }
     pub async fn drop<W: AsyncWrite + Send + Sync + Unpin + 'static>(
@@ -398,10 +400,10 @@ impl Tree {
         self.col_map.clear();
 
         let filemeta = fs::metadata(root_path_str).await?;
-        let mut fileitems = vec![Arc::new(FileItem::new(root_path, filemeta))];
-        self.entry_info_recursively(fileitems[0].clone(), &mut fileitems)
+        let mut fileitems = vec![Arc::new(FileItem::new(root_path, filemeta, 0))];
+        self.entry_info_recursively(fileitems[0].clone(), &mut fileitems, 1)
             .await?;
-        self.fileitems = fileitems;
+        // self.fileitems = fileitems;
 
         // make line for each file item.
         // first the root cell
@@ -421,6 +423,87 @@ impl Tree {
             win.set_cursor((0, v)).await?;
         }
         self.hl_lines(&nvim, 0, self.fileitems.len()).await?;
+        Ok(())
+    }
+
+    fn make_cells(
+        &self,
+        items: &[FileItemPtr],
+        first_item_is_root: bool,
+    ) -> Vec<(ColumnType, Vec<Cell>)> {
+        let mut r = Vec::new();
+        for col in &self.config.columns {
+            r.push((col.clone(), Vec::new()))
+        }
+        let mut is_first = true;
+        for fileitem in items {
+            let mut start = 0;
+            let mut byte_start = 0;
+            let is_root = first_item_is_root && is_first;
+            for i in 0..self.config.columns.len() {
+                let col = &self.config.columns[i];
+                let mut cell = Cell::new(self, fileitem, col.clone(), is_root);
+                cell.byte_start = byte_start;
+                cell.byte_end = byte_start + cell.text.len();
+                cell.col_start = start;
+
+                // TODO: count grid for file name
+                cell.col_end = start + cell.text.len();
+                // NOTE: alignment
+                if *col == ColumnType::FILENAME {
+                    let stop = KSTOP - cell.col_end;
+                    if stop > 0 {
+                        cell.col_end += KSTOP;
+                        cell.byte_end += KSTOP;
+                    } else if is_root && KSTOP > cell.col_start + 5 {
+                        // TODO: implement this
+                    }
+                }
+                let sep = if *col == ColumnType::INDENT { 0 } else { 1 };
+                start = cell.col_end + sep;
+                byte_start = cell.byte_end + sep;
+                r[i].1.push(cell);
+            }
+            is_first = false;
+        }
+        r
+    }
+
+    // insert at the pos
+    fn insert_items_and_cells(
+        &mut self,
+        pos: usize,
+        items: Vec<FileItemPtr>,
+        is_first_item_root: bool,
+    ) -> Result<(), ArgError> {
+        if pos >= self.fileitems.len() {
+            return Err(ArgError::new("pos larger than the fileitem size"));
+        }
+        // make cells
+        let cells = self.make_cells(&items, is_first_item_root);
+        // insert items
+        let size_to_insert = items.len();
+        self.fileitems.splice(pos..pos, items);
+        // update the indices
+        if pos + size_to_insert < self.fileitems.len() {
+            for i in pos + size_to_insert..self.fileitems.len() {
+                // TODO: is it safe here?
+                // NOTE: this should be safe
+                // 1. this is the only place modifying the index
+                // 2. the data is in TreeHandler::data, which is protected by a mutex => impossible
+                //    to be modified concurrently.
+                unsafe {
+                    (&mut *(self.fileitems[i].as_ref() as *const FileItem as *mut FileItem)).id = i;
+                }
+            }
+        }
+        // insert the cells
+        for (col, cells) in cells {
+            if !self.col_map.contains_key(&col) {
+                self.col_map.insert(col.clone(), Vec::new());
+            }
+            self.col_map.get_mut(&col).unwrap().splice(pos..pos, cells);
+        }
         Ok(())
     }
 
@@ -478,7 +561,8 @@ impl Tree {
         &'a self,
         item: Arc<FileItem>,
         fileitem_lst: &'a mut Vec<FileItemPtr>,
-    ) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn std::error::Error>>> + 'a + Send>> {
+        mut start_id: usize,
+    ) -> Pin<Box<dyn Future<Output = Result<usize, Box<dyn std::error::Error>>> + 'a + Send>> {
         Box::pin(async move {
             let mut read_dir = fs::read_dir(&item.path).await?;
             let mut entries = Vec::new();
@@ -495,7 +579,7 @@ impl Tree {
                 entries.push((entry, metadata, file_type));
             }
             if entries.len() <= 0 {
-                return Ok(());
+                return Ok(start_id);
             }
             // directory first, name order
             entries.sort_by(|l, r| {
@@ -511,7 +595,9 @@ impl Tree {
             let mut i = 0;
             let count = entries.len();
             for entry in entries {
-                let mut fileitem = FileItem::new(fs::canonicalize(entry.0.path()).await?, entry.1);
+                let mut fileitem =
+                    FileItem::new(fs::canonicalize(entry.0.path()).await?, entry.1, start_id);
+                start_id += 1;
                 fileitem.level = level;
                 fileitem.parent = Some(item.clone());
                 if i == count - 1 {
@@ -522,7 +608,8 @@ impl Tree {
                     if *expand {
                         fileitem.opened_tree = true;
                         fileitem_lst.push(Arc::new(fileitem));
-                        self.entry_info_recursively(item.clone(), fileitem_lst)
+                        start_id = self
+                            .entry_info_recursively(item.clone(), fileitem_lst, start_id)
                             .await?;
                     } else {
                         fileitem_lst.push(Arc::new(fileitem));
@@ -531,7 +618,7 @@ impl Tree {
                     fileitem_lst.push(Arc::new(fileitem));
                 }
             }
-            Ok(())
+            Ok(start_id)
         })
     }
 
