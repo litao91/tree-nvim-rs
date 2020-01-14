@@ -1,4 +1,3 @@
-#![feature(get_mut_unchecked)]
 use crate::column::ColumnType;
 use crate::column::{Cell, FileItem, FileItemPtr, GitStatus};
 use crate::errors::ArgError;
@@ -338,11 +337,13 @@ impl Tree {
         );
         self.ctx = ctx.clone();
         match action {
-            "drop" => self.drop(nvim, args).await,
+            "drop" => self.action_drop(nvim, args).await,
+            "open_tree" | "open_directory" => self.action_open_directory(nvim, args).await,
             _ => error!("Unknown action: {}", action),
         }
     }
-    pub async fn drop<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+
+    pub async fn action_drop<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
         nvim: &Neovim<W>,
         args: Value,
@@ -375,8 +376,28 @@ impl Tree {
             }
         }
     }
+
+    pub async fn action_open_directory<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        args: Value,
+    ) {
+        let cur = match self.fileitems.get_mut(self.ctx.cursor as usize - 1) {
+            Some(v) => v,
+            None => {
+                error!("Invalid line cursor positoin: {}", self.ctx.cursor);
+                return;
+            }
+        };
+        if cur.metadata.is_dir() && !cur.dir_opened {
+            unsafe {}
+        }
+    }
     pub fn get_fileitem(&self, idx: usize) -> &FileItem {
         &self.fileitems[idx]
+    }
+    pub unsafe fn get_fileitem_mut(&self, idx: usize) -> &mut FileItem {
+        &mut *(self.fileitems[idx].as_ref() as *const FileItem as *mut FileItem)
     }
     pub async fn change_root<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
@@ -605,7 +626,7 @@ impl Tree {
                 i += 1;
                 if let Some(expand) = self.expand_store.get(fileitem.path.to_str().unwrap()) {
                     if *expand {
-                        fileitem.opened_tree = true;
+                        fileitem.dir_opened = true;
                         fileitem_lst.push(Arc::new(fileitem));
                         start_id = self
                             .entry_info_recursively(item.clone(), fileitem_lst, start_id)
