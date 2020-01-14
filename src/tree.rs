@@ -420,16 +420,24 @@ impl Tree {
                     return;
                 }
             }
+            self.expand_store.insert(root_path.to_owned(), true);
+            // icon should be open
+            self.update_cells(idx, idx + 1);
             let child_item_size = child_fileitem.len();
+            info!("Before insert");
+            for f in &self.fileitems {
+                info!("name:{:?}, id: {}, level: {}", f.path.file_name(), f.id, f.level);
+            }
             match self.insert_items_and_cells(idx + 1, child_fileitem) {
                 Ok(_) => {}
                 Err(e) => error!("Err: {:?}", e),
             };
-            self.expand_store.insert(root_path.to_owned(), true);
-            // icon should be open
-            self.update_cells(idx, idx + 1);
+            info!("AFter insert");
+            for f in &self.fileitems {
+                info!("name:{:?}, id: {}, level: {}", f.path.file_name(), f.id, f.level);
+            }
             // update lines
-            let end = idx + child_item_size;
+            let end = idx + child_item_size + 1;
             let ret = (idx..end).map(|i| self.makeline(i)).collect();
             match self
                 .buf_set_lines(nvim, idx as i64, (idx + 1) as i64, true, ret)
