@@ -233,6 +233,21 @@ function! tree#util#cd(path) abort
   endif
 endfunction
 
+function! tree#util#input(prompt, ...) abort
+  let text = get(a:000, 0, '')
+  let completion = get(a:000, 1, '')
+  try
+    if completion !=# ''
+      return input(a:prompt, text, completion)
+    else
+      return input(a:prompt, text)
+    endif
+  catch
+    " ignore the errors
+    return ''
+  endtry
+endfunction
+
 function! tree#util#truncate_skipping(str, max, footer_width, separator) abort
   let width = strwidth(a:str)
   if width <= a:max

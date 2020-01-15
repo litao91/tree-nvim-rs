@@ -368,6 +368,7 @@ impl Tree {
             "open_or_close_tree" => self.action_open_or_close_tree(nvim, args).await,
             "cd" => self.action_cd(nvim, args).await,
             "call" => self.action_call(nvim, args).await,
+            "new_file" => self.action_new_file(nvim, args).await,
             _ => {
                 error!("Unknown action: {}", action);
                 return;
@@ -383,6 +384,66 @@ impl Tree {
                 self.cursor_history.insert(path.to_owned(), self.ctx.cursor);
             }
         }
+    }
+    pub async fn cwd_input<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        nvim: &Neovim<W>,
+        cwd: &str,
+        prompt: &str,
+        text: &str,
+        completion: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let save_cwd = nvim.call_function("getcwd", vec![]).await?;
+        info!("cwd: {:?}", save_cwd);
+        nvim.call_function("tree#util#cd", vec![Value::from(cwd)])
+            .await?;
+
+        let filename = if let Value::String(v) = nvim
+            .call_function(
+                "tree#util#input",
+                vec![
+                    Value::from(prompt),
+                    Value::from(text),
+                    Value::from(completion),
+                ],
+            )
+            .await?
+        {
+            v.into_str().unwrap()
+        } else {
+            return Err(Box::new(ArgError::new("Wrong return type")));
+        };
+
+        nvim.call_function("tree#util#cd", vec![save_cwd]).await?;
+
+        Ok(filename)
+    }
+
+    pub async fn action_new_file<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        arg: Value,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let idx = self.ctx.cursor as usize - 1;
+        let cur = &self.fileitems[idx];
+        let cur_path_str = cur.path.to_str().unwrap();
+        // idx == 0 => is_root
+        let cwd = if self.is_item_opened(cur_path_str) || idx == 0 {
+            cur_path_str
+        } else if let Some(p) = cur.parent.as_ref() {
+            p.path.to_str().unwrap()
+        } else {
+            return Err(Box::new(ArgError::new(
+                "can't find correct position to create new file",
+            )));
+        };
+        let new_filename =
+            Self::cwd_input(nvim, &cwd, "Please inptu a new filename: ", "file", "").await?;
+        let is_dir = new_filename.ends_with('/');
+        let mut filename = std::path::PathBuf::from(cwd);
+        filename.push(new_filename);
+        info!("New file name: {:?}", filename);
+        if filename.exists() {}
+        Ok(())
     }
     pub async fn action_call<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
