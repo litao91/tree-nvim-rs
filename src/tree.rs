@@ -160,6 +160,25 @@ pub struct Config {
     pub toggle: bool,
 }
 
+impl Config {
+    pub fn get_cfg_map(&self) -> Value {
+        Value::Map(vec![
+            (Value::from("winwidth"), Value::from(self.winwidth)),
+            (Value::from("winheight"), Value::from(self.winheight)),
+            (
+                Value::from("split"),
+                Value::from(Into::<&str>::into(self.split.clone())),
+            ),
+            (Value::from("new"), Value::from(self.new)),
+            (Value::from("toggle"), Value::from(self.toggle)),
+            (
+                Value::from("direction"),
+                Value::from(self.direction.clone()),
+            ),
+        ])
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {

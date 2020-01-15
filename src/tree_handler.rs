@@ -1,3 +1,4 @@
+use crate::errors::ArgError;
 use crate::tree::Context;
 use crate::tree::Tree;
 use async_std::sync::RwLock;
@@ -5,15 +6,14 @@ use async_trait::async_trait;
 use log::*;
 use nvim_rs::{exttypes::Buffer, runtime::AsyncWrite, Handler, Neovim, Value};
 use std::collections::HashMap;
-use std::collections::LinkedList;
 use std::convert::From;
 use std::sync::Arc;
 
 #[derive(Default, Debug)]
 pub struct TreeHandlerData {
-    cfg_map: HashMap<String, Value>,
+    // cfg_map: HashMap<String, Value>,
     trees: HashMap<(i8, Vec<u8>), Tree>,
-    treebufs: LinkedList<(i8, Vec<u8>)>, // recently used order
+    treebufs: Vec<(i8, Vec<u8>)>, // recently used order
     // buffer: Option<Buffer<<TreeHandler as Handler>::Writer>>,
     buf_count: u32,
     ctx: Context,
@@ -49,35 +49,22 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         buf: Buffer<<Self as Handler>::Writer>,
         ns_id: i64,
         path: &str,
+        cfg_map: HashMap<String, Value>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let bufnr = buf.get_value().as_ext().unwrap();
         let bufnr = (bufnr.0, Vec::from(bufnr.1));
         let mut tree = Tree::new(bufnr.clone(), &buf, &nvim, ns_id).await?;
         {
             let d = data.read().await;
-            tree.config.update(&d.cfg_map)?;
+            tree.config.update(&cfg_map)?;
         }
         tree.change_root(path, &nvim).await?;
 
-        let tree_cfg = Value::Map(vec![
-            (Value::from("winwidth"), Value::from(tree.config.winwidth)),
-            (Value::from("winheight"), Value::from(tree.config.winheight)),
-            (
-                Value::from("split"),
-                Value::from(Into::<&str>::into(tree.config.split.clone())),
-            ),
-            (Value::from("new"), Value::from(tree.config.new)),
-            (Value::from("toggle"), Value::from(tree.config.toggle)),
-            (
-                Value::from("direction"),
-                Value::from(tree.config.direction.clone()),
-            ),
-        ]);
-
+        let tree_cfg = tree.config.get_cfg_map();
         {
             let mut d = data.write().await;
             d.trees.insert(bufnr.clone(), tree);
-            d.treebufs.push_front(bufnr.clone());
+            d.treebufs.push(bufnr.clone());
             d.ctx.prev_bufnr = Some(bufnr.clone());
         }
         nvim.execute_lua("resume(...)", vec![Value::Ext(bufnr.0, bufnr.1), tree_cfg])
@@ -104,12 +91,13 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         data: TreeHandlerDataPtr,
         nvim: Neovim<<Self as Handler>::Writer>,
         path: String,
+        cfg_map: HashMap<String, Value>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         info!("start_tree");
         let is_new;
         {
             let d = data.read().await;
-            let new_val = match d.cfg_map.get("new") {
+            let new_val = match cfg_map.get("new") {
                 Some(Value::Boolean(v)) => Some(v),
                 _ => None,
             };
@@ -123,8 +111,33 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             info!("creating new tree");
             let ns_id = Self::create_namespace(nvim.clone()).await?;
             let buf = Self::create_buf(data.clone(), nvim.clone()).await?;
-            Self::create_tree(data, nvim, buf, ns_id, &path).await?;
+            Self::create_tree(data, nvim, buf, ns_id, &path, cfg_map).await?;
         } else {
+            let mut d = data.write().await;
+            // only a few items, wouldn't be a problem
+            let prev_bufnr = match &d.ctx.prev_bufnr {
+                Some(nr) => nr,
+                None => return Err(Box::new(ArgError::new("prev_bufnr not defined"))),
+            }
+            .clone();
+            let tree = match d.trees.get_mut(&prev_bufnr) {
+                Some(t) => t,
+                None => return Err(Box::new(ArgError::new("unknown tree"))),
+            };
+            tree.config.update(&cfg_map)?;
+            let tree_cfg = tree.config.get_cfg_map();
+            d.treebufs.retain(|v| v != &prev_bufnr);
+            d.treebufs.push(prev_bufnr);
+            let bufnr_vals: Value = Value::Array(
+                d.treebufs
+                    .iter()
+                    .cloned()
+                    .map(|v| Value::Ext(v.0, v.1))
+                    .collect(),
+            );
+            nvim.command("lua require('tree')").await?;
+            nvim.execute_lua("resume(...)", vec![bufnr_vals, tree_cfg])
+                .await?;
         }
         Ok(())
     }
@@ -166,10 +179,6 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                     };
                     cfg_map.insert(key, v);
                 }
-                {
-                    let mut d = self.data.write().await;
-                    d.cfg_map = cfg_map;
-                }
 
                 let path = match &method_args[0] {
                     Value::String(s) => s.as_str().unwrap().to_owned(),
@@ -177,7 +186,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                 };
                 let data = self.data.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = Self::start_tree(data, nvim, path).await {
+                    if let Err(e) = Self::start_tree(data, nvim, path, cfg_map).await {
                         error!("Start tree error: {:?}", e);
                     }
                 });
