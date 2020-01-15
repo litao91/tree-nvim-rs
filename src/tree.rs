@@ -442,7 +442,23 @@ impl Tree {
         let mut filename = std::path::PathBuf::from(cwd);
         filename.push(new_filename);
         info!("New file name: {:?}", filename);
-        if filename.exists() {}
+        if filename.exists() {
+            nvim.call_function(
+                "tree#util#print_error",
+                vec![Value::from(format!(
+                    "{} already exists",
+                    filename.to_str().unwrap()
+                ))],
+            )
+            .await?;
+        }
+        if is_dir {
+            fs::create_dir(filename).await?;
+        } else {
+            let parent = filename.clone().pop();
+            fs::create_dir_all(filename).await?;
+            fs::File::create(filename).await?;
+        }
         Ok(())
     }
     pub async fn action_call<W: AsyncWrite + Send + Sync + Unpin + 'static>(
