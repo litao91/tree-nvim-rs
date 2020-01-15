@@ -364,6 +364,7 @@ impl Tree {
         match match action {
             "drop" => self.action_drop(nvim, args).await,
             "open_tree" => self.action_open_tree(nvim, args).await,
+            "close_tree" => self.action_close_tree(nvim, args).await,
             "cd" => self.action_cd(nvim, args).await,
             "call" => self.action_call(nvim, args).await,
             _ => {
@@ -484,12 +485,68 @@ impl Tree {
         Ok(())
     }
 
-    pub async fn action_open_tree<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+    pub async fn close_tree<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
         nvim: &Neovim<W>,
-        _args: Value,
+        idx: usize,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let idx = self.ctx.cursor as usize - 1;
+        // skip the root
+        if idx == 0 {
+            return Ok(());
+        }
+
+        // get the current
+        let target = match self.fileitems.get(idx) {
+            Some(fi) => fi,
+            None => {
+                return Err(Box::new(ArgError::from_string(format!(
+                    "Index out of bound: {}",
+                    idx
+                ))));
+            }
+        }
+        .clone();
+        let path_str = match target.path.to_str() {
+            Some(path) => path,
+            None => {
+                return Err(Box::new(ArgError::new("filename error")));
+            }
+        };
+        let is_opened = match self.expand_store.get(path_str) {
+            Some(v) => *v,
+            None => false,
+        };
+        if target.metadata.is_dir() && is_opened {
+            self.expand_store.remove(path_str);
+            let start = idx + 1;
+            let base_level = target.level;
+            let mut end = start;
+            for fi in &self.fileitems[start..] {
+                if fi.level <= base_level {
+                    break;
+                }
+                end += 1;
+            }
+            self.remove_items_and_cells(start, end)?;
+            self.update_cells(idx, idx + 1);
+            let ret = vec![self.makeline(idx)];
+            self.buf_set_lines(nvim, idx as i64, end as i64, true, ret)
+                .await?;
+            self.hl_lines(&nvim, idx, idx + 1).await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn open_tree<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        idx: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // don't open root item
+        if idx == 0 {
+            return Ok(());
+        }
         let cur = match self.fileitems.get(idx) {
             Some(fi) => fi,
             None => {
@@ -500,13 +557,13 @@ impl Tree {
             }
         }
         .clone();
-        let root_path = match cur.path.to_str() {
+        let path_str = match cur.path.to_str() {
             Some(path) => path,
             None => {
                 return Err(Box::new(ArgError::new("filename error")));
             }
         };
-        let is_opened = match self.expand_store.get(root_path) {
+        let is_opened = match self.expand_store.get(path_str) {
             Some(v) => *v,
             None => false,
         };
@@ -514,7 +571,7 @@ impl Tree {
             let mut child_fileitem = Vec::new();
             self.entry_info_recursively(cur.clone(), &mut child_fileitem, idx + 1)
                 .await?;
-            self.expand_store.insert(root_path.to_owned(), true);
+            self.expand_store.insert(path_str.to_owned(), true);
             // icon should be open
             self.update_cells(idx, idx + 1);
             let child_item_size = child_fileitem.len();
@@ -530,6 +587,23 @@ impl Tree {
             self.hl_lines(&nvim, idx, idx + 1 + child_item_size).await?;
         }
         Ok(())
+    }
+    pub async fn action_close_tree<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        _args: Value,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let idx = self.ctx.cursor as usize - 1;
+        self.close_tree(nvim, idx).await
+    }
+
+    pub async fn action_open_tree<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        _args: Value,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let idx = self.ctx.cursor as usize - 1;
+        self.open_tree(nvim, idx).await
     }
 
     pub fn update_cells(&mut self, sl: usize, el: usize) {
@@ -654,6 +728,29 @@ impl Tree {
             is_first = false;
         }
         r
+    }
+
+    fn remove_items_and_cells(&mut self, start: usize, end: usize) -> Result<(), ArgError> {
+        // remove the items in between
+        for (_, val) in self.col_map.iter_mut() {
+            val.splice(start..end, vec![]);
+        }
+        self.fileitems.splice(start..end, vec![]);
+
+        if start < self.fileitems.len() {
+            for i in start..self.fileitems.len() {
+                // TODO: is it safe here?
+                // NOTE: this should be safe
+                // 1. this is the only place modifying the index
+                // 2. the data is in TreeHandler::data, which is protected by a mutex => impossible
+                //    to be modified concurrently.
+                unsafe {
+                    (&mut *(self.fileitems[i].as_ref() as *const FileItem as *mut FileItem)).id = i;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     // insert at the pos
