@@ -296,7 +296,7 @@ pub struct Tree {
     // git_map: HashMap<String, GitStatus>,
     col_map: HashMap<ColumnType, Vec<Cell>>,
     targets: Vec<usize>,
-    cursor_history: HashMap<String, i64>,
+    cursor_history: HashMap<String, u64>,
     ctx: Context,
 }
 impl Tree {
@@ -342,18 +342,81 @@ impl Tree {
             action, args, ctx
         );
         self.ctx = ctx.clone();
-        match action {
+        match match action {
             "drop" => self.action_drop(nvim, args).await,
             "open_tree" | "open_directory" => self.action_open_directory(nvim, args).await,
-            _ => error!("Unknown action: {}", action),
+            "cd" => self.action_cd(nvim, args).await,
+            _ => {
+                error!("Unknown action: {}", action);
+                return;
+            }
+        } {
+            Ok(_) => {}
+            Err(e) => error!("err: {:?}", e),
+        }
+    }
+    pub fn save_cursor(&mut self) {
+        if let Some(item) = self.fileitems.get(0) {
+            if let Some(path) = item.path.to_str() {
+                self.cursor_history.insert(path.to_owned(), self.ctx.cursor);
+            }
         }
     }
 
+    pub async fn action_cd<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        arg: Value,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.save_cursor();
+        let args = match arg {
+            Value::Array(v) => v,
+            _ => {
+                Err(ArgError::new("Invalid arg type"))?;
+                return Ok(());
+            }
+        };
+        if !args.is_empty() {
+            let dir = if let Some(d) = args[0].as_str() {
+                d
+            } else {
+                Err(ArgError::new("Dir should be of type String"))?;
+                return Ok(());
+            };
+            if dir == ".." {
+                match self.fileitems[0].path.clone().parent() {
+                    Some(p) => self.change_root(p.to_str().unwrap(), nvim).await?,
+                    None => {}
+                }
+            } else if dir == "." {
+                let cur_idx = self.ctx.cursor as usize - 1;
+                let cur = match self.fileitems.get(cur_idx) {
+                    Some(i) => i,
+                    None => {
+                        Err(ArgError::new("invalid cursor pos"))?;
+                        return Ok(());
+                    }
+                };
+                let cur_path_str = cur.path.to_str().unwrap();
+                let cmd = if self.is_item_opened(cur_path_str) {
+                    format!("cd {}", cur_path_str)
+                } else {
+                    format!("cd {}", dir)
+                };
+                nvim.command(&cmd).await?
+            } else {
+                self.change_root(dir, nvim).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Open like :drop
     pub async fn action_drop<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
         nvim: &Neovim<W>,
         args: Value,
-    ) {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let info: String;
         let should_change_root;
         if let Some(cur) = self.fileitems.get(self.ctx.cursor as usize - 1) {
@@ -364,44 +427,37 @@ impl Tree {
                 should_change_root = false;
             }
         } else {
-            error!("drop: invalid cursor position");
-            return;
+            return Err(Box::new(ArgError::new("drop: invalid cursor position")));
         }
         if should_change_root {
-            match self.change_root(&info, nvim).await {
-                Ok(_) => {}
-                Err(e) => error!("Error changing root: {:?}", e),
-            }
+            self.change_root(&info, nvim).await?;
         } else {
-            match nvim
-                .execute_lua("drop(...)", vec![args, Value::from(info)])
-                .await
-            {
-                Ok(_) => {}
-                Err(e) => error!("Error: {:?}", e),
-            }
+            nvim.execute_lua("drop(...)", vec![args, Value::from(info)])
+                .await?;
         }
+        Ok(())
     }
 
     pub async fn action_open_directory<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
         nvim: &Neovim<W>,
         _args: Value,
-    ) {
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let idx = self.ctx.cursor as usize - 1;
         let cur = match self.fileitems.get(idx) {
             Some(fi) => fi,
             None => {
-                error!("Index out of bound: {}", idx);
-                return;
+                return Err(Box::new(ArgError::from_string(format!(
+                    "Index out of bound: {}",
+                    idx
+                ))));
             }
         }
         .clone();
         let root_path = match cur.path.to_str() {
             Some(path) => path,
             None => {
-                error!("filename error");
-                return;
+                return Err(Box::new(ArgError::new("filename error")));
             }
         };
         let is_opened = match self.expand_store.get(root_path) {
@@ -410,16 +466,8 @@ impl Tree {
         };
         if cur.metadata.is_dir() && !is_opened {
             let mut child_fileitem = Vec::new();
-            match self
-                .entry_info_recursively(cur.clone(), &mut child_fileitem, idx + 1)
-                .await
-            {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("Err: {:?}", e);
-                    return;
-                }
-            }
+            self.entry_info_recursively(cur.clone(), &mut child_fileitem, idx + 1)
+                .await?;
             self.expand_store.insert(root_path.to_owned(), true);
             // icon should be open
             self.update_cells(idx, idx + 1);
@@ -431,24 +479,11 @@ impl Tree {
             // update lines
             let end = idx + child_item_size + 1;
             let ret = (idx..end).map(|i| self.makeline(i)).collect();
-            match self
-                .buf_set_lines(nvim, idx as i64, (idx + 1) as i64, true, ret)
-                .await
-            {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("{:?}", e);
-                    return;
-                }
-            }
-            match self.hl_lines(&nvim, idx, idx + 1 + child_item_size).await {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("{:?}", e);
-                    return;
-                }
-            }
+            self.buf_set_lines(nvim, idx as i64, (idx + 1) as i64, true, ret)
+                .await?;
+            self.hl_lines(&nvim, idx, idx + 1 + child_item_size).await?;
         }
+        Ok(())
     }
 
     pub fn update_cells(&mut self, sl: usize, el: usize) {
@@ -526,7 +561,7 @@ impl Tree {
         self.buf_set_lines(nvim, 0, -1, true, ret).await?;
         if let Some(v) = last_cursor {
             let win = Window::new(Value::from(0), nvim.clone());
-            win.set_cursor((0, v)).await?;
+            win.set_cursor((0, v as i64)).await?;
         }
         self.hl_lines(&nvim, 0, self.fileitems.len()).await?;
         Ok(())
@@ -712,9 +747,10 @@ impl Tree {
                 i += 1;
                 if let Some(expand) = self.expand_store.get(fileitem.path.to_str().unwrap()) {
                     if *expand {
-                        fileitem_lst.push(Arc::new(fileitem));
+                        let ft_ptr = Arc::new(fileitem);
+                        fileitem_lst.push(ft_ptr.clone());
                         start_id = self
-                            .entry_info_recursively(item.clone(), fileitem_lst, start_id)
+                            .entry_info_recursively(ft_ptr.clone(), fileitem_lst, start_id)
                             .await?;
                     } else {
                         fileitem_lst.push(Arc::new(fileitem));

@@ -114,10 +114,6 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
                 _ => None,
             };
             is_new = if d.trees.len() < 1 || new_val.is_some() && *new_val.unwrap() {
-                /*
-                d.resource
-                    .insert("start_path".to_owned(), Value::from(path));
-                */
                 true
             } else {
                 false
@@ -163,7 +159,6 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                     return Err(Value::from("Error: path is required for _tree_start"));
                 }
                 let mut cfg_map = HashMap::new();
-                info!("context: {:?}", context);
                 for (k, v) in context {
                     let key = match k {
                         Value::String(v) => v.into_str().unwrap(),
