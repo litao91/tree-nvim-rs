@@ -131,6 +131,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             let bufnr_vals: Value = Value::Array(
                 d.treebufs
                     .iter()
+                    .rev()
                     .cloned()
                     .map(|v| Value::Ext(v.0, v.1))
                     .collect(),
