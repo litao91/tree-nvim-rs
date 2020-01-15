@@ -365,6 +365,7 @@ impl Tree {
             "drop" => self.action_drop(nvim, args).await,
             "open_tree" => self.action_open_tree(nvim, args).await,
             "close_tree" => self.action_close_tree(nvim, args).await,
+            "open_or_close_tree" => self.action_open_or_close_tree(nvim, args).await,
             "cd" => self.action_cd(nvim, args).await,
             "call" => self.action_call(nvim, args).await,
             _ => {
@@ -618,6 +619,29 @@ impl Tree {
         } else {
             Ok(())
         }
+    }
+
+    pub async fn action_open_or_close_tree<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        _args: Value,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let idx = self.ctx.cursor as usize - 1;
+        let target = match self.fileitems.get(idx) {
+            Some(fi) => fi,
+            None => {
+                return Err(Box::new(ArgError::from_string(format!(
+                    "item not found: {}",
+                    idx
+                ))));
+            }
+        };
+        if target.metadata.is_dir() && self.is_item_opened(target.path.to_str().unwrap()) {
+            self.close_tree(nvim, idx).await?;
+        } else {
+            self.open_tree(nvim, idx).await?;
+        }
+        Ok(())
     }
 
     pub async fn action_open_tree<W: AsyncWrite + Send + Sync + Unpin + 'static>(
