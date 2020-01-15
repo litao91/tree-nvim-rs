@@ -363,8 +363,9 @@ impl Tree {
         self.ctx = ctx.clone();
         match match action {
             "drop" => self.action_drop(nvim, args).await,
-            "open_tree" | "open_directory" => self.action_open_directory(nvim, args).await,
+            "open_tree" => self.action_open_tree(nvim, args).await,
             "cd" => self.action_cd(nvim, args).await,
+            "call" => self.action_call(nvim, args).await,
             _ => {
                 error!("Unknown action: {}", action);
                 return;
@@ -380,6 +381,32 @@ impl Tree {
                 self.cursor_history.insert(path.to_owned(), self.ctx.cursor);
             }
         }
+    }
+    pub async fn action_call<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        arg: Value,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let args = match arg {
+            Value::Array(v) => v,
+            _ => {
+                Err(ArgError::new("Invalid arg type"))?;
+                return Ok(());
+            }
+        };
+        let func = if let Some(Value::String(v)) = args.get(0) {
+            v.as_str().unwrap()
+        } else {
+            return Err(Box::new(ArgError::new("func not defined")));
+        };
+        let cur = &self.fileitems[self.ctx.cursor as usize - 1];
+
+        let ctx = Value::Map(vec![(
+            Value::from("targets"),
+            Value::Array(vec![Value::from(cur.path.to_str().unwrap())]),
+        )]);
+        nvim.call_function(func, vec![ctx]).await?;
+        Ok(())
     }
 
     pub async fn action_cd<W: AsyncWrite + Send + Sync + Unpin + 'static>(
@@ -457,7 +484,7 @@ impl Tree {
         Ok(())
     }
 
-    pub async fn action_open_directory<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+    pub async fn action_open_tree<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
         nvim: &Neovim<W>,
         _args: Value,
