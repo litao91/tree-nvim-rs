@@ -594,7 +594,30 @@ impl Tree {
         _args: Value,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let idx = self.ctx.cursor as usize - 1;
-        self.close_tree(nvim, idx).await
+        let target = match self.fileitems.get(idx) {
+            Some(fi) => fi,
+            None => {
+                return Err(Box::new(ArgError::from_string(format!(
+                    "item not found: {}",
+                    idx
+                ))));
+            }
+        };
+        if target.metadata.is_dir() && self.is_item_opened(target.path.to_str().unwrap()) {
+            self.close_tree(nvim, idx).await
+        } else if let Some(p) = target.parent.clone() {
+            self.close_tree(nvim, p.id).await?;
+            match nvim
+                .call("cursor", vec![Value::from(p.id + 1), Value::from(1)])
+                .await?
+            {
+                Err(e) => error!("{:?}", e),
+                _ => {}
+            };
+            Ok(())
+        } else {
+            Ok(())
+        }
     }
 
     pub async fn action_open_tree<W: AsyncWrite + Send + Sync + Unpin + 'static>(
