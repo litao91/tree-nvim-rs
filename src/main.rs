@@ -1,4 +1,5 @@
 use crate::tree::Tree;
+use backtrace::Backtrace;
 use async_trait::async_trait;
 use fork::{daemon, Fork};
 use log::*;
@@ -61,7 +62,8 @@ fn panic_hook() {
     use std::panic;
 
     panic::set_hook(Box::new(|p| {
-        error!("panic {:?}", p);
+        let backtrace = Backtrace::new();
+        error!("panic {:?}\n{:?}", p, backtrace);
     }));
 }
 
@@ -89,13 +91,19 @@ where
 }
 
 async fn run(args: Vec<String>) {
-    assert_eq!(args[1], "--server");
     debug!("args: {:?}", args);
-    let server = &args[2];
-    let (nvim, io_handler) =
-        create::new_unix_socket(server, TreeHandler::<WriteHalf<UnixStream>>::default())
-            .await
-            .unwrap();
+    let mut server = None;
+    for i in 0..args.len() {
+        if args[i] == "--server" {
+            server = args.get(i + 1);
+        } 
+    }
+    let (nvim, io_handler) = create::new_unix_socket(
+        server.unwrap(),
+        TreeHandler::<WriteHalf<UnixStream>>::default(),
+    )
+    .await
+    .unwrap();
     init_channel(&nvim).await;
     match io_handler.await {
         Err(joinerr) => error!("Error joining IO loop '{}'", joinerr),
