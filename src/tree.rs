@@ -426,7 +426,8 @@ impl Tree {
         let cur = match self.fileitems.get(parent_idx) {
             Some(c) => c,
             None => return Err(Box::new(ArgError::new("Invalid index"))),
-        };
+        }
+        .clone();
 
         let idx = cur.id;
         let base_level = cur.level;
@@ -439,18 +440,21 @@ impl Tree {
             end += 1;
         }
 
-        info!("Redraw range [{}, {})", start, end);
-        self.remove_items_and_cells(start, end);
+        info!("remove range [{}, {})", start, end);
+        self.remove_items_and_cells(start, end)?;
         let mut child_items = Vec::new();
         self.entry_info_recursively(cur.clone(), &mut child_items, idx + 1)
             .await?;
         let child_item_size = child_items.len();
         self.insert_items_and_cells(start, child_items)?;
-        // update lines
-        let ret = (idx..end).map(|i| self.makeline(i)).collect();
+        // the new end after adding the new file
+        let new_end = start + child_item_size;
+        info!("redraw range [{}, {})", start, new_end);
+        // update lines (zero based)
+        let ret = (start..new_end).map(|i| self.makeline(i)).collect();
         self.buf_set_lines(nvim, start as i64, end as i64, true, ret)
             .await?;
-        self.hl_lines(&nvim, start, end).await?;
+        self.hl_lines(&nvim, start, new_end).await?;
         Ok(())
     }
 
@@ -462,10 +466,13 @@ impl Tree {
         let idx = self.ctx.cursor as usize - 1;
         let cur = &self.fileitems[idx];
         let cur_path_str = cur.path.to_str().unwrap();
+        let idx_to_redraw;
         // idx == 0 => is_root
         let cwd = if self.is_item_opened(cur_path_str) || idx == 0 {
+            idx_to_redraw = idx;
             cur_path_str
         } else if let Some(p) = cur.parent.as_ref() {
+            idx_to_redraw = p.id;
             p.path.to_str().unwrap()
         } else {
             return Err(Box::new(ArgError::new(
@@ -478,23 +485,23 @@ impl Tree {
         let mut filename = std::path::PathBuf::from(cwd);
         filename.push(new_filename);
         info!("New file name: {:?}", filename);
+        let message = Value::from(format!("{} already exists", filename.to_str().unwrap()));
         if filename.exists() {
-            nvim.call_function(
-                "tree#util#print_error",
-                vec![Value::from(format!(
-                    "{} already exists",
-                    filename.to_str().unwrap()
-                ))],
-            )
-            .await?;
+            nvim.call_function("tree#util#print_error", vec![message])
+                .await?;
+            return Err(Box::new(ArgError::new("File exists!")));
         }
         if is_dir {
             fs::create_dir(filename).await?;
         } else {
-            let parent = filename.clone().pop();
-            fs::create_dir_all(filename).await?;
+            let mut parent = filename.clone();
+            parent.pop();
+            fs::create_dir_all(parent).await?;
             fs::File::create(filename).await?;
         }
+
+        self.redraw(nvim, idx_to_redraw).await?;
+
         Ok(())
     }
     pub async fn action_call<W: AsyncWrite + Send + Sync + Unpin + 'static>(
@@ -1092,7 +1099,6 @@ impl Tree {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let buf = Buffer::new(Value::Ext(self.bufnr.0, self.bufnr.1.clone()), nvim.clone());
         for i in sl..el {
-            let fileitem = &self.fileitems[i];
             for col in &self.config.columns {
                 let cell = &self.col_map.get(col).unwrap()[i];
                 if let Some(hl_group) = &cell.hl_group {

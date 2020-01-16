@@ -186,13 +186,15 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                     _ => return Err(Value::from("Error: path should be string")),
                 };
                 let data = self.data.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = Self::start_tree(data, nvim, path, cfg_map).await {
-                        error!("Start tree error: {:?}", e);
-                    }
-                });
-
-                Ok(Value::Nil)
+                /* tokio::spawn(async move {
+                if let Err(e) = Self::start_tree(data, nvim, path, cfg_map).await {
+                    error!("Start tree error: {:?}", e);
+                };
+                 });*/
+                match Self::start_tree(data, nvim, path, cfg_map).await {
+                    Err(e) => Err(Value::from(format!("Error: {:?}", e))),
+                    _ => Ok(Value::Nil)
+                }
             }
             "_tree_get_candidate" => {
                 let buf = match nvim.get_current_buf().await {
