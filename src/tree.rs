@@ -966,10 +966,21 @@ impl Tree {
         strict: bool,
         replacement: Vec<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let buf = Buffer::new(Value::Ext(self.bufnr.0, self.bufnr.1.clone()), nvim.clone());
-        buf.set_option("modifiable", Value::from(true)).await?;
-        buf.set_lines(start, end, strict, replacement).await?;
-        buf.set_option("modifiable", Value::from(false)).await?;
+        let buf = Buffer::new(
+            Value::Ext(self.bufnr.0.clone(), self.bufnr.1.clone()),
+            nvim.clone(),
+        );
+        tokio::spawn(async move {
+            buf.set_option("modifiable", Value::from(true))
+                .await
+                .unwrap();
+            buf.set_lines(start, end, strict, replacement)
+                .await
+                .unwrap();
+            buf.set_option("modifiable", Value::from(false))
+                .await
+                .unwrap();
+        });
         Ok(())
     }
 
@@ -1064,19 +1075,23 @@ impl Tree {
         sl: usize,
         el: usize,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let buf = Buffer::new(Value::Ext(self.bufnr.0, self.bufnr.1.clone()), nvim.clone());
         for i in sl..el {
             for col in &self.config.columns {
                 let cell = &self.col_map.get(col).unwrap()[i];
-                if let Some(hl_group) = &cell.hl_group {
-                    buf.add_highlight(
-                        self.icon_ns_id,
-                        hl_group,
-                        i as i64,
-                        cell.byte_start as i64,
-                        (cell.byte_start + cell.text.len()) as i64,
-                    )
-                    .await?;
+                if let Some(hl_group) = cell.hl_group.clone() {
+                    let buf = Buffer::new(
+                        Value::Ext(self.bufnr.0.clone(), self.bufnr.1.clone()),
+                        nvim.clone(),
+                    );
+                    let icon_ns_id = self.icon_ns_id;
+                    let start = cell.byte_start as i64;
+                    let end = (cell.byte_start + cell.text.len()) as i64;
+                    tokio::spawn(async move {
+                        let hl_group = hl_group;
+                        buf.add_highlight(icon_ns_id, &hl_group, i as i64, start, end)
+                            .await
+                            .unwrap();
+                    });
                 }
             }
         }
