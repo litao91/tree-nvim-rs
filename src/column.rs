@@ -1,8 +1,8 @@
 use crate::tree::Tree;
+use log::*;
 use std::convert::From;
 use std::ffi::OsStr;
 use std::fs::Metadata;
-use log::*;
 #[derive(Eq, PartialEq, Clone)]
 pub enum Icon {
     FolderClosed,

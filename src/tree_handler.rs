@@ -193,7 +193,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                  });*/
                 match Self::start_tree(data, nvim, path, cfg_map).await {
                     Err(e) => Err(Value::from(format!("Error: {:?}", e))),
-                    _ => Ok(Value::Nil)
+                    _ => Ok(Value::Nil),
                 }
             }
             "_tree_get_candidate" => {
