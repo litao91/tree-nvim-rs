@@ -966,21 +966,10 @@ impl Tree {
         strict: bool,
         replacement: Vec<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let buf = Buffer::new(
-            Value::Ext(self.bufnr.0.clone(), self.bufnr.1.clone()),
-            nvim.clone(),
-        );
-        tokio::spawn(async move {
-            buf.set_option("modifiable", Value::from(true))
-                .await
-                .unwrap();
-            buf.set_lines(start, end, strict, replacement)
-                .await
-                .unwrap();
-            buf.set_option("modifiable", Value::from(false))
-                .await
-                .unwrap();
-        });
+        let buf = Buffer::new(Value::Ext(self.bufnr.0.clone(), self.bufnr.1.clone()), nvim.clone());
+        buf.set_option("modifiable", Value::from(true)).await?;
+        buf.set_lines(start, end, strict, replacement).await?;
+        buf.set_option("modifiable", Value::from(false)).await?;
         Ok(())
     }
 
@@ -1088,9 +1077,15 @@ impl Tree {
                     let end = (cell.byte_start + cell.text.len()) as i64;
                     tokio::spawn(async move {
                         let hl_group = hl_group;
-                        buf.add_highlight(icon_ns_id, &hl_group, i as i64, start, end)
-                            .await
-                            .unwrap();
+                        buf.add_highlight(
+                            icon_ns_id,
+                            &hl_group,
+                            i as i64,
+                            start,
+                            end,
+                        )
+                        .await
+                        .unwrap();
                     });
                 }
             }
