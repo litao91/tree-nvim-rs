@@ -418,6 +418,42 @@ impl Tree {
         Ok(filename)
     }
 
+    pub async fn redraw<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        parent_idx: usize,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let cur = match self.fileitems.get(parent_idx) {
+            Some(c) => c,
+            None => return Err(Box::new(ArgError::new("Invalid index"))),
+        };
+
+        let idx = cur.id;
+        let base_level = cur.level;
+        let start = cur.id + 1;
+        let mut end = start;
+        for fi in &self.fileitems[start..] {
+            if fi.level <= base_level {
+                break;
+            }
+            end += 1;
+        }
+
+        info!("Redraw range [{}, {})", start, end);
+        self.remove_items_and_cells(start, end);
+        let mut child_items = Vec::new();
+        self.entry_info_recursively(cur.clone(), &mut child_items, idx + 1)
+            .await?;
+        let child_item_size = child_items.len();
+        self.insert_items_and_cells(start, child_items)?;
+        // update lines
+        let ret = (idx..end).map(|i| self.makeline(i)).collect();
+        self.buf_set_lines(nvim, start as i64, end as i64, true, ret)
+            .await?;
+        self.hl_lines(&nvim, start, end).await?;
+        Ok(())
+    }
+
     pub async fn action_new_file<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
         nvim: &Neovim<W>,
@@ -653,10 +689,7 @@ impl Tree {
             // icon should be open
             self.update_cells(idx, idx + 1);
             let child_item_size = child_fileitem.len();
-            match self.insert_items_and_cells(idx + 1, child_fileitem) {
-                Ok(_) => {}
-                Err(e) => error!("Err: {:?}", e),
-            };
+            self.insert_items_and_cells(idx + 1, child_fileitem)?;
             // update lines
             let end = idx + child_item_size + 1;
             let ret = (idx..end).map(|i| self.makeline(i)).collect();
