@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 # nvim-rs = "0.1.0"
 nvim-rs = { path = "/data00/litao.91/repos/nvim-rs" }
-tokio = { version = "0.2.8", features = ["sync", "rt-core", "macros", "io-util", "tcp", "uds", "process", "io-std", "dns", "rt-threaded", "io-driver", "fs"] }
+tokio = { version = "0.2.9", features = ["sync", "rt-core", "macros", "io-util", "tcp", "uds", "process", "io-std", "dns", "rt-threaded", "io-driver", "fs"] }
 async-trait = "0.1.18"
 simplelog = "0.7.4"
 log = "0.3.7"

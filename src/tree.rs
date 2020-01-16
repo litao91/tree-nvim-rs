@@ -688,6 +688,7 @@ impl Tree {
             Some(v) => *v,
             None => false,
         };
+
         if cur.metadata.is_dir() && !is_opened {
             let mut child_fileitem = Vec::new();
             self.entry_info_recursively(cur.clone(), &mut child_fileitem, idx + 1)
@@ -753,6 +754,7 @@ impl Tree {
                 ))));
             }
         };
+
         if target.metadata.is_dir() && self.is_item_opened(target.path.to_str().unwrap()) {
             self.close_tree(nvim, idx).await?;
         } else {
@@ -876,10 +878,10 @@ impl Tree {
                 cell.col_end = start + cell.text.len();
                 // NOTE: alignment
                 if *col == ColumnType::FILENAME {
-                    let stop = KSTOP - cell.col_end;
+                    let stop = KSTOP as i64 - cell.col_end as i64;
                     if stop > 0 {
-                        cell.col_end += KSTOP;
-                        cell.byte_end += KSTOP;
+                        cell.col_end += stop as usize;
+                        cell.byte_end += stop as usize;
                     } else if is_root && KSTOP > cell.col_start + 5 {
                         // TODO: implement this
                     }
@@ -971,40 +973,6 @@ impl Tree {
         Ok(())
     }
 
-    // insert the cell at the given row
-    fn insert_cells(&mut self, row_nr: usize, is_root: bool) {
-        let fileitem = &self.fileitems[row_nr];
-        let mut start = 0;
-        let mut byte_start = 0;
-        for col in &self.config.columns {
-            let mut cell = Cell::new(self, fileitem, col.clone(), is_root);
-            cell.byte_start = byte_start;
-            cell.byte_end = byte_start + cell.text.len();
-            cell.col_start = start;
-
-            // TODO: count grid for file name
-            cell.col_end = start + cell.text.len();
-            // NOTE: alignment
-            if *col == ColumnType::FILENAME {
-                let stop = KSTOP - cell.col_end;
-                if stop > 0 {
-                    cell.col_end += KSTOP;
-                    cell.byte_end += KSTOP;
-                } else if is_root && KSTOP > cell.col_start + 5 {
-                    // TODO: implement this
-                }
-            }
-            let sep = if *col == ColumnType::INDENT { 0 } else { 1 };
-            start = cell.col_end + sep;
-            byte_start = cell.byte_end + sep;
-            if !self.col_map.contains_key(col) {
-                self.col_map.insert(col.clone(), Vec::new());
-            }
-            // TODO: inefficient here
-            self.col_map.get_mut(col).unwrap().insert(row_nr, cell);
-        }
-    }
-
     fn entry_info_recursively<'a>(
         &'a self,
         item: Arc<FileItem>,
@@ -1023,8 +991,7 @@ impl Tree {
                     continue;
                 }
                 let metadata = entry.metadata().await?;
-                let file_type = entry.file_type().await?;
-                entries.push((entry, metadata, file_type));
+                entries.push((entry, metadata));
             }
             if entries.len() <= 0 {
                 return Ok(start_id);

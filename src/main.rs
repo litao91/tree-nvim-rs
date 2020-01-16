@@ -57,6 +57,14 @@ fn init_logging() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn panic_hook() {
+    use std::panic;
+
+    panic::set_hook(Box::new(|p| {
+        error!("panic {:?}", p);
+    }));
+}
+
 async fn init_channel<T>(nvim: &Neovim<T>)
 where
     T: Sync + Send + Unpin + tokio::io::AsyncWrite,
@@ -119,6 +127,7 @@ async fn run(args: Vec<String>) {
 #[tokio::main]
 async fn main() {
     init_logging().unwrap();
+    panic_hook();
     let mut args: Vec<String> = env::args().collect();
     let mut nofork = false;
     for arg in &args {
