@@ -326,6 +326,9 @@ impl Tree {
             None => false,
         }
     }
+    pub fn is_item_selected(&self, idx: usize) -> bool {
+        self.selected_items.contains(&idx)
+    }
     pub async fn new<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         bufnr: (i8, Vec<u8>),
         buf: &Buffer<W>,
@@ -370,6 +373,7 @@ impl Tree {
             "call" => self.action_call(nvim, args, ctx).await,
             "new_file" => self.action_new_file(nvim, args, ctx).await,
             "rename" => self.action_rename(nvim, args, ctx).await,
+            "toggle_select" => self.action_toggle_select(nvim, args, ctx).await,
             _ => {
                 error!("Unknown action: {}", action);
                 return;
@@ -442,7 +446,7 @@ impl Tree {
         }
     }
 
-    pub async fn redraw<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+    pub async fn redraw_subtree<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
         nvim: &Neovim<W>,
         parent_idx: usize,
@@ -481,6 +485,36 @@ impl Tree {
         self.hl_lines(&nvim, start, new_end).await?;
         Ok(())
     }
+    pub async fn action_remove<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        arg: Value,
+        ctx: Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
+    }
+    pub async fn action_toggle_select<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        _arg: Value,
+        ctx: Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let idx = (ctx.cursor - 1) as usize;
+        if self.selected_items.contains(&idx) {
+            self.selected_items.remove(&idx);
+        } else {
+            self.selected_items.insert(idx);
+        }
+
+        // soft redraw a single line
+        self.update_cells(idx, idx+1);
+        let ret = vec![self.makeline(idx)];
+        self.buf_set_lines(nvim, idx as i64, idx as i64 + 1, true, ret)
+            .await?;
+        self.hl_lines(&nvim, idx, idx + 1).await?;
+
+        Ok(())
+    }
 
     pub async fn action_rename<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
@@ -513,7 +547,7 @@ impl Tree {
         std::fs::rename(&cur.path, new_path)?;
         // TODO: no need to redraw the entire tree, we can redraw the parent and the target's
         // parent
-        self.redraw(nvim, 0).await?;
+        self.redraw_subtree(nvim, 0).await?;
 
         Ok(())
     }
@@ -561,7 +595,7 @@ impl Tree {
             fs::File::create(filename).await?;
         }
 
-        self.redraw(nvim, idx_to_redraw).await?;
+        self.redraw_subtree(nvim, idx_to_redraw).await?;
 
         Ok(())
     }
@@ -962,10 +996,15 @@ impl Tree {
             val.splice(start..end, vec![]);
         }
         self.fileitems.splice(start..end, vec![]);
+        for i in start..end {
+            self.selected_items.remove(&i);
+        }
 
+        // items after the deleted
         if start < self.fileitems.len() {
             for i in start..self.fileitems.len() {
                 let fi = self.fileitems[i].as_ref();
+                // replace the old id with the new id for selected items
                 if self.selected_items.remove(&fi.id) {
                     self.selected_items.insert(i);
                 }
@@ -993,24 +1032,29 @@ impl Tree {
             return Err(ArgError::new("pos larger than the fileitem size"));
         }
         let is_first_item_root = pos == 0;
-        // make cells
-        let cells = self.make_cells(&items, is_first_item_root);
         // insert items
         let size_to_insert = items.len();
-        self.fileitems.splice(pos..pos, items);
+        self.fileitems.splice(pos..pos, items.iter().cloned());
         // update the indices
         if pos + size_to_insert < self.fileitems.len() {
             for i in pos + size_to_insert..self.fileitems.len() {
+                let fi = self.fileitems[i].as_ref();
+                if self.selected_items.remove(&fi.id) {
+                    self.selected_items.insert(i);
+                }
                 // TODO: is it safe here?
                 // NOTE: this should be safe
                 // 1. this is the only place modifying the index
                 // 2. the data is in TreeHandler::data, which is protected by a mutex => impossible
                 //    to be modified concurrently.
                 unsafe {
-                    (&mut *(self.fileitems[i].as_ref() as *const FileItem as *mut FileItem)).id = i;
+                    (&mut *(fi as *const FileItem as *mut FileItem)).id = i;
                 }
             }
         }
+
+        // make cells
+        let cells = self.make_cells(&items, is_first_item_root);
         // insert the cells
         for (col, cells) in cells {
             if !self.col_map.contains_key(&col) {

@@ -681,6 +681,10 @@ impl ColumnCell {
             ColumnType::MARK => {
                 if fileitem.metadata.permissions().readonly() {
                     text = String::from(READ_ONLY_ICON);
+                    hl_group = Some(String::from(GuiColor::BROWN.hl_group_name()))
+                } else if tree.is_item_selected(fileitem.id) {
+                    text = String::from(SELECTED_ICON);
+                    hl_group = Some(String::from(GuiColor::GREEN.hl_group_name()))
                 } else {
                     text = String::from(" ");
                 }
