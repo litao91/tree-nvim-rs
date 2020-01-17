@@ -494,6 +494,8 @@ impl Tree {
             return Err(Box::new(ArgError::new("File exists!")));
         }
         std::fs::rename(&cur.path, new_path)?;
+        // TODO: no need to redraw the entire tree, we can redraw the parent and the target's
+        // parent
         self.redraw(nvim, 0).await?;
 
         Ok(())
