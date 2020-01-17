@@ -466,6 +466,35 @@ impl Tree {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let idx = ctx.cursor as usize - 1;
         let cur = &self.fileitems[idx];
+        let old_path = cur.path.to_str().unwrap();
+        let cwd = self.fileitems[0].path.to_str().unwrap();
+        let msg = format!("New name: {} -> ", old_path);
+        let new_filename = Self::cwd_input(
+            nvim,
+            cwd,
+            &msg,
+            old_path,
+            "file",
+        )
+        .await?;
+        if new_filename.is_empty() {
+            return Ok(());
+        }
+        // let new_path = fs::canonicalize(cur.path.join(new_filename)).await?;
+        let new_path = cur.path.join(new_filename);
+        if new_path == cur.path {
+            return Ok(());
+        }
+        info!("New path: {:?}", new_path);
+
+        if new_path.exists() {
+            let message = Value::from(format!("{} already exists", new_path.to_str().unwrap()));
+            nvim.call_function("tree#util#print_error", vec![message])
+                .await?;
+            return Err(Box::new(ArgError::new("File exists!")));
+        }
+        std::fs::rename(&cur.path, new_path)?;
+        self.redraw(nvim, 0).await?;
 
         Ok(())
     }
@@ -493,7 +522,7 @@ impl Tree {
             )));
         };
         let new_filename =
-            Self::cwd_input(nvim, &cwd, "Please inptu a new filename: ", "file", "").await?;
+            Self::cwd_input(nvim, &cwd, "Please input a new filename: ", "", "file").await?;
         let is_dir = new_filename.ends_with('/');
         let mut filename = std::path::PathBuf::from(cwd);
         filename.push(new_filename);
