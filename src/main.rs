@@ -1,6 +1,6 @@
 use crate::tree::Tree;
-use backtrace::Backtrace;
 use async_trait::async_trait;
+use backtrace::Backtrace;
 use fork::{daemon, Fork};
 use log::*;
 use nvim_rs::{create, exttypes::Buffer, runtime::Command, Handler, Neovim, Value};
@@ -96,7 +96,7 @@ async fn run(args: Vec<String>) {
     for i in 0..args.len() {
         if args[i] == "--server" {
             server = args.get(i + 1);
-        } 
+        }
     }
     let (nvim, io_handler) = create::new_unix_socket(
         server.unwrap(),

@@ -3,6 +3,7 @@ use log::*;
 use std::convert::From;
 use std::ffi::OsStr;
 use std::fs::Metadata;
+
 #[derive(Eq, PartialEq, Clone)]
 pub enum Icon {
     FolderClosed,
@@ -638,7 +639,6 @@ pub struct FileItem {
     pub path: std::path::PathBuf,
     pub metadata: Metadata,
     pub level: usize,
-    pub selected: bool,
     pub parent: Option<FileItemPtr>, // the index of the parent in the Tree::fileitems
     pub last: bool,
     pub id: usize,
@@ -652,7 +652,6 @@ impl FileItem {
             path,
             metadata,
             level: 0,
-            selected: false,
             parent: None,
             last: false,
             id,
@@ -665,7 +664,7 @@ impl FileItem {
 }
 
 #[derive(Debug)]
-pub struct Cell {
+pub struct ColumnCell {
     pub col_start: usize,
     pub col_end: usize,
     pub byte_start: usize,
@@ -674,7 +673,7 @@ pub struct Cell {
     pub hl_group: Option<String>,
 }
 
-impl Cell {
+impl ColumnCell {
     pub fn new(tree: &Tree, fileitem: &FileItem, ty: ColumnType, is_root_cell: bool) -> Self {
         let mut text = String::new();
         let mut hl_group = None;

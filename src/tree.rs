@@ -1,5 +1,5 @@
 use crate::column::ColumnType;
-use crate::column::{Cell, FileItem, FileItemPtr, GitStatus};
+use crate::column::{ColumnCell, FileItem, FileItemPtr, GitStatus};
 use crate::errors::ArgError;
 use crate::fs_utils;
 use log::*;
@@ -10,6 +10,7 @@ use nvim_rs::{
 };
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::convert::From;
 use std::future::Future;
 use std::pin::Pin;
@@ -310,10 +311,11 @@ pub struct Tree {
     pub bufnr: (i8, Vec<u8>), // use bufnr to avoid tedious generic code
     pub icon_ns_id: i64,
     pub config: Config,
+    selected_items: HashSet<usize>,
     fileitems: Vec<FileItemPtr>,
     expand_store: HashMap<String, bool>,
     // git_map: HashMap<String, GitStatus>,
-    col_map: HashMap<ColumnType, Vec<Cell>>,
+    col_map: HashMap<ColumnType, Vec<ColumnCell>>,
     targets: Vec<usize>,
     cursor_history: HashMap<String, u64>,
 }
@@ -345,6 +347,7 @@ impl Tree {
             col_map: Default::default(),
             targets: Default::default(),
             cursor_history: Default::default(),
+            selected_items: Default::default(),
         })
     }
     pub async fn action<W: AsyncWrite + Send + Sync + Unpin + 'static>(
@@ -418,6 +421,27 @@ impl Tree {
         Ok(filename)
     }
 
+    pub async fn confirm<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        nvim: &Neovim<W>,
+        question: String,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        if let Value::Integer(v) = nvim
+            .call_function(
+                "tree#util#confirm",
+                vec![
+                    Value::from(question),
+                    Value::from("&Yes\n&No\n&Cancel"),
+                    Value::from(2),
+                ],
+            )
+            .await?
+        {
+            Ok(v.as_i64().unwrap() == 1)
+        } else {
+            Err(Box::new(ArgError::new("Invalid return type")))
+        }
+    }
+
     pub async fn redraw<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
         nvim: &Neovim<W>,
@@ -469,14 +493,7 @@ impl Tree {
         let old_path = cur.path.to_str().unwrap();
         let cwd = self.fileitems[0].path.to_str().unwrap();
         let msg = format!("New name: {} -> ", old_path);
-        let new_filename = Self::cwd_input(
-            nvim,
-            cwd,
-            &msg,
-            old_path,
-            "file",
-        )
-        .await?;
+        let new_filename = Self::cwd_input(nvim, cwd, &msg, old_path, "file").await?;
         if new_filename.is_empty() {
             return Ok(());
         }
@@ -849,13 +866,6 @@ impl Tree {
         ])
     }
 
-    pub fn get_fileitem(&self, idx: usize) -> &FileItem {
-        &self.fileitems[idx]
-    }
-    // TODO: use unsafe or mutex?
-    pub unsafe fn get_fileitem_mut(&self, idx: usize) -> Option<&mut FileItem> {
-        Some(&mut *(self.fileitems.get(idx)?.as_ref() as *const FileItem as *mut FileItem))
-    }
     pub async fn change_root<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
         path_str: &str,
@@ -907,7 +917,7 @@ impl Tree {
         &self,
         items: &[FileItemPtr],
         first_item_is_root: bool,
-    ) -> Vec<(ColumnType, Vec<Cell>)> {
+    ) -> Vec<(ColumnType, Vec<ColumnCell>)> {
         let mut r = Vec::new();
         for col in &self.config.columns {
             r.push((col.clone(), Vec::new()))
@@ -919,7 +929,7 @@ impl Tree {
             let is_root = first_item_is_root && is_first;
             for i in 0..self.config.columns.len() {
                 let col = &self.config.columns[i];
-                let mut cell = Cell::new(self, fileitem, col.clone(), is_root);
+                let mut cell = ColumnCell::new(self, fileitem, col.clone(), is_root);
                 cell.byte_start = byte_start;
                 cell.byte_end = byte_start + cell.text.len();
                 cell.col_start = start;
@@ -955,13 +965,17 @@ impl Tree {
 
         if start < self.fileitems.len() {
             for i in start..self.fileitems.len() {
+                let fi = self.fileitems[i].as_ref();
+                if self.selected_items.remove(&fi.id) {
+                    self.selected_items.insert(i);
+                }
                 // TODO: is it safe here?
                 // NOTE: this should be safe
                 // 1. this is the only place modifying the index
                 // 2. the data is in TreeHandler::data, which is protected by a mutex => impossible
                 //    to be modified concurrently.
                 unsafe {
-                    (&mut *(self.fileitems[i].as_ref() as *const FileItem as *mut FileItem)).id = i;
+                    (&mut *(fi as *const FileItem as *mut FileItem)).id = i;
                 }
             }
         }

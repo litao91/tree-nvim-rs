@@ -248,6 +248,16 @@ function! tree#util#input(prompt, ...) abort
   endtry
 endfunction
 
+function! tree#util#confirm(msg, choices, default) abort
+  try
+    return confirm(a:msg, a:choices, a:default)
+  catch
+    " ignore the errors
+  endtry
+
+  return a:default
+endfunction
+
 function! tree#util#truncate_skipping(str, max, footer_width, separator) abort
   let width = strwidth(a:str)
   if width <= a:max
