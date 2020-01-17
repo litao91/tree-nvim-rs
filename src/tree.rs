@@ -316,7 +316,6 @@ pub struct Tree {
     col_map: HashMap<ColumnType, Vec<Cell>>,
     targets: Vec<usize>,
     cursor_history: HashMap<String, u64>,
-    ctx: Context,
 }
 impl Tree {
     pub fn is_item_opened(&self, path: &str) -> bool {
@@ -346,7 +345,6 @@ impl Tree {
             col_map: Default::default(),
             targets: Default::default(),
             cursor_history: Default::default(),
-            ctx: Default::default(),
         })
     }
     pub async fn action<W: AsyncWrite + Send + Sync + Unpin + 'static>(
@@ -360,15 +358,15 @@ impl Tree {
             "Action: {:?}, \n args: {:?}, \n ctx: {:?}",
             action, args, ctx
         );
-        self.ctx = ctx.clone();
         match match action {
-            "drop" => self.action_drop(nvim, args).await,
-            "open_tree" => self.action_open_tree(nvim, args).await,
-            "close_tree" => self.action_close_tree(nvim, args).await,
-            "open_or_close_tree" => self.action_open_or_close_tree(nvim, args).await,
-            "cd" => self.action_cd(nvim, args).await,
-            "call" => self.action_call(nvim, args).await,
-            "new_file" => self.action_new_file(nvim, args).await,
+            "drop" => self.action_drop(nvim, args, ctx).await,
+            "open_tree" => self.action_open_tree(nvim, args, ctx).await,
+            "close_tree" => self.action_close_tree(nvim, args, ctx).await,
+            "open_or_close_tree" => self.action_open_or_close_tree(nvim, args, ctx).await,
+            "cd" => self.action_cd(nvim, args, ctx).await,
+            "call" => self.action_call(nvim, args, ctx).await,
+            "new_file" => self.action_new_file(nvim, args, ctx).await,
+            "rename" => self.action_rename(nvim, args, ctx).await,
             _ => {
                 error!("Unknown action: {}", action);
                 return;
@@ -378,13 +376,15 @@ impl Tree {
             Err(e) => error!("err: {:?}", e),
         }
     }
-    pub fn save_cursor(&mut self) {
+
+    pub fn save_cursor(&mut self, ctx: &Context) {
         if let Some(item) = self.fileitems.get(0) {
             if let Some(path) = item.path.to_str() {
-                self.cursor_history.insert(path.to_owned(), self.ctx.cursor);
+                self.cursor_history.insert(path.to_owned(), ctx.cursor);
             }
         }
     }
+
     pub async fn cwd_input<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         nvim: &Neovim<W>,
         cwd: &str,
@@ -458,12 +458,25 @@ impl Tree {
         Ok(())
     }
 
+    pub async fn action_rename<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        _arg: Value,
+        ctx: Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let idx = ctx.cursor as usize - 1;
+        let cur = &self.fileitems[idx];
+
+        Ok(())
+    }
+
     pub async fn action_new_file<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
         nvim: &Neovim<W>,
-        arg: Value,
+        _arg: Value,
+        ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let idx = self.ctx.cursor as usize - 1;
+        let idx = ctx.cursor as usize - 1;
         let cur = &self.fileitems[idx];
         let cur_path_str = cur.path.to_str().unwrap();
         let idx_to_redraw;
@@ -508,6 +521,7 @@ impl Tree {
         &mut self,
         nvim: &Neovim<W>,
         arg: Value,
+        ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let args = match arg {
             Value::Array(v) => v,
@@ -521,7 +535,7 @@ impl Tree {
         } else {
             return Err(Box::new(ArgError::new("func not defined")));
         };
-        let cur = &self.fileitems[self.ctx.cursor as usize - 1];
+        let cur = &self.fileitems[ctx.cursor as usize - 1];
 
         let ctx = Value::Map(vec![(
             Value::from("targets"),
@@ -535,8 +549,9 @@ impl Tree {
         &mut self,
         nvim: &Neovim<W>,
         arg: Value,
+        ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        self.save_cursor();
+        self.save_cursor(&ctx);
         let args = match arg {
             Value::Array(v) => v,
             _ => {
@@ -557,7 +572,7 @@ impl Tree {
                     None => {}
                 }
             } else if dir == "." {
-                let cur_idx = self.ctx.cursor as usize - 1;
+                let cur_idx = ctx.cursor as usize - 1;
                 let cur = match self.fileitems.get(cur_idx) {
                     Some(i) => i,
                     None => {
@@ -584,10 +599,11 @@ impl Tree {
         &mut self,
         nvim: &Neovim<W>,
         args: Value,
+        ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let info: String;
         let should_change_root;
-        if let Some(cur) = self.fileitems.get(self.ctx.cursor as usize - 1) {
+        if let Some(cur) = self.fileitems.get(ctx.cursor as usize - 1) {
             info = cur.path.to_str().unwrap().to_owned();
             if cur.metadata.is_dir() {
                 should_change_root = true;
@@ -711,8 +727,9 @@ impl Tree {
         &mut self,
         nvim: &Neovim<W>,
         _args: Value,
+        ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let idx = self.ctx.cursor as usize - 1;
+        let idx = ctx.cursor as usize - 1;
         let target = match self.fileitems.get(idx) {
             Some(fi) => fi,
             None => {
@@ -743,8 +760,9 @@ impl Tree {
         &mut self,
         nvim: &Neovim<W>,
         _args: Value,
+        ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let idx = self.ctx.cursor as usize - 1;
+        let idx = ctx.cursor as usize - 1;
         let target = match self.fileitems.get(idx) {
             Some(fi) => fi,
             None => {
@@ -767,8 +785,9 @@ impl Tree {
         &mut self,
         nvim: &Neovim<W>,
         _args: Value,
+        ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let idx = self.ctx.cursor as usize - 1;
+        let idx = ctx.cursor as usize - 1;
         self.open_tree(nvim, idx).await
     }
 
@@ -966,7 +985,10 @@ impl Tree {
         strict: bool,
         replacement: Vec<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let buf = Buffer::new(Value::Ext(self.bufnr.0.clone(), self.bufnr.1.clone()), nvim.clone());
+        let buf = Buffer::new(
+            Value::Ext(self.bufnr.0.clone(), self.bufnr.1.clone()),
+            nvim.clone(),
+        );
         buf.set_option("modifiable", Value::from(true)).await?;
         buf.set_lines(start, end, strict, replacement).await?;
         buf.set_option("modifiable", Value::from(false)).await?;
@@ -1077,15 +1099,9 @@ impl Tree {
                     let end = (cell.byte_start + cell.text.len()) as i64;
                     tokio::spawn(async move {
                         let hl_group = hl_group;
-                        buf.add_highlight(
-                            icon_ns_id,
-                            &hl_group,
-                            i as i64,
-                            start,
-                            end,
-                        )
-                        .await
-                        .unwrap();
+                        buf.add_highlight(icon_ns_id, &hl_group, i as i64, start, end)
+                            .await
+                            .unwrap();
                     });
                 }
             }

@@ -191,15 +191,18 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                     _ => return Err(Value::from("Error: path should be string")),
                 };
                 let data = self.data.clone();
-                /* tokio::spawn(async move {
-                if let Err(e) = Self::start_tree(data, nvim, path, cfg_map).await {
-                    error!("Start tree error: {:?}", e);
-                };
-                 });*/
+                tokio::spawn(async move {
+                    if let Err(e) = Self::start_tree(data, nvim, path, cfg_map).await {
+                        error!("Start tree error: {:?}", e);
+                    };
+                });
+                /*
                 match Self::start_tree(data, nvim, path, cfg_map).await {
                     Err(e) => Err(Value::from(format!("Error: {:?}", e))),
                     _ => Ok(Value::Nil),
                 }
+                */
+                Ok(Value::Nil)
             }
             "_tree_get_candidate" => {
                 let buf = match nvim.get_current_buf().await {
@@ -293,13 +296,22 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
             info!("async action: {}", action);
 
             {
+                let start = std::time::Instant::now();
                 let mut d = self.data.write().await;
+                info!(
+                    "Waited took {} secs for lock",
+                    start.elapsed().as_secs_f64()
+                );
                 d.prev_bufnr = ctx.prev_bufnr.clone();
                 if let Some(bufnr) = ctx.prev_bufnr.clone() {
                     if let Some(tree) = d.trees.get_mut(&bufnr) {
                         let start = std::time::Instant::now();
                         tree.action(&neovim, &action, act_args, ctx).await;
-                        info!("Action {} took {} secs", action, start.elapsed().as_secs_f64());
+                        info!(
+                            "Action {} took {} secs",
+                            action,
+                            start.elapsed().as_secs_f64()
+                        );
                     }
                 }
             }
