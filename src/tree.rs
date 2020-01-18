@@ -2,7 +2,6 @@ use crate::column::ColumnType;
 use crate::column::{ColumnCell, FileItem, FileItemPtr, GitStatus};
 use crate::errors::ArgError;
 use crate::fs_utils;
-use unicode_width::UnicodeWidthStr;
 use log::*;
 use nvim_rs::{
     exttypes::{Buffer, Window},
@@ -17,6 +16,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::fs;
+use unicode_width::UnicodeWidthStr;
 
 #[derive(Default, Debug, Clone)]
 pub struct Context {
@@ -375,6 +375,7 @@ impl Tree {
             "new_file" => self.action_new_file(nvim, args, ctx).await,
             "rename" => self.action_rename(nvim, args, ctx).await,
             "toggle_select" => self.action_toggle_select(nvim, args, ctx).await,
+            "remove" => self.action_remove(nvim, args, ctx).await,
             _ => {
                 error!("Unknown action: {}", action);
                 return;
@@ -499,6 +500,50 @@ impl Tree {
         arg: Value,
         ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let args = match arg {
+            Value::Array(v) => v,
+            _ => {
+                Err(ArgError::new("Invalid arg type"))?;
+                return Ok(());
+            }
+        };
+
+        let force = match args.get(0) {
+            Some(Value::String(v)) => v.as_str().unwrap() == "true",
+            _ => false,
+        };
+        let targets: Vec<&FileItem> = if self.selected_items.is_empty() {
+            vec![&self.fileitems[ctx.cursor as usize - 1].as_ref()]
+        } else {
+            self.selected_items
+                .iter()
+                .map(|x| self.fileitems[*x].as_ref())
+                .collect()
+        };
+        if !force {
+            let message = if targets.len() == 1 {
+                format!(
+                    "Are you sure you want to delete {}?",
+                    targets[0].path.to_str().unwrap()
+                )
+            } else {
+                format!("Are you sure you want to delete {} files?", targets.len())
+            };
+            if !Self::confirm(nvim, message).await? {
+                info!("Remove cancelled");
+                return Ok(());
+            }
+        }
+        for target in targets {
+            if target.metadata.is_dir() {
+                fs::remove_dir_all(&target.path).await?;
+            } else {
+                fs::remove_file(&target.path).await?;
+            }
+        }
+        // redraw the entire tree
+        self.redraw_subtree(nvim, 0, true).await?;
+
         Ok(())
     }
     pub async fn action_toggle_select<W: AsyncWrite + Send + Sync + Unpin + 'static>(
