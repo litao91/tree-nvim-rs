@@ -981,15 +981,15 @@ impl Tree {
 
         let filemeta = std::fs::metadata(root_path_str)?;
         let mut fileitems = vec![Arc::new(FileItem::new(root_path, filemeta, 0))];
-        let start = std::time::Instant::now();
+        // let start = std::time::Instant::now();
         // self.entry_info_recursively(fileitems[0].clone(), &mut fileitems, 1)
         //    .await?;
         self.entry_info_recursively_sync(fileitems[0].clone(), &mut fileitems, 1)?;
-        info!("get entry info took {} secs", start.elapsed().as_secs_f64());
+        // info!("get entry info took {} secs", start.elapsed().as_secs_f64());
 
-        let start = std::time::Instant::now();
+        // let start = std::time::Instant::now();
         self.insert_items_and_cells(0, fileitems)?;
-        info!("insert entries took {} secs", start.elapsed().as_secs_f64());
+        // info!("insert entries took {} secs", start.elapsed().as_secs_f64());
 
         let ret = (0..self.fileitems.len())
             .map(|i| self.makeline(i))
@@ -999,9 +999,9 @@ impl Tree {
             let win = Window::new(Value::from(0), nvim.clone());
             win.set_cursor((0, v as i64)).await?;
         }
-        let start = std::time::Instant::now();
+        // let start = std::time::Instant::now();
         self.hl_lines(&nvim, 0, self.fileitems.len()).await?;
-        info!("hl took {} secs", start.elapsed().as_secs_f64());
+        // info!("hl took {} secs", start.elapsed().as_secs_f64());
         Ok(())
     }
 
@@ -1142,6 +1142,8 @@ impl Tree {
         Ok(())
     }
 
+    // NOTE: tests show that the sync version is much faster than the async version
+    // using tokio::fs
     fn entry_info_recursively_sync<'a>(
         &'a self,
         item: Arc<FileItem>,

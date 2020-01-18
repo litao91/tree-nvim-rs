@@ -57,7 +57,9 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         {
             tree.config.update(&cfg_map)?;
         }
+        let start = std::time::Instant::now();
         tree.change_root(path, &nvim).await?;
+        info!("change root took: {} secs", start.elapsed().as_secs_f64());
 
         let tree_cfg = tree.config.get_cfg_map();
         {
@@ -66,8 +68,12 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             d.treebufs.push(bufnr.clone());
             d.prev_bufnr = Some(bufnr.clone());
         }
-        nvim.execute_lua("resume(...)", vec![Value::Ext(bufnr.0, bufnr.1), tree_cfg])
-            .await?;
+        // let start = std::time::Instant::now();
+        let args = vec![Value::Ext(bufnr.0, bufnr.1), tree_cfg];
+        tokio::spawn(async move {
+            nvim.execute_lua("resume(...)", args).await.unwrap();
+        });
+        // info!("resume took: {} secs", start.elapsed().as_secs_f64());
         Ok(())
     }
 
@@ -114,7 +120,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             let buf = Self::create_buf(data.clone(), nvim.clone()).await?;
             // let start = std::time::Instant::now();
             Self::create_tree(data, nvim, buf, ns_id, &path, cfg_map).await?;
-            // info!("Create tree took {} secs", start.elapsed().as_secs_f64());
+        // info!("Create tree took {} secs", start.elapsed().as_secs_f64());
         } else {
             let bufnr_vals;
             let tree_cfg;
