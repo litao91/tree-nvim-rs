@@ -638,7 +638,7 @@ pub enum GitStatus {
 pub struct FileItem {
     pub path: std::path::PathBuf,
     pub metadata: Metadata,
-    pub level: usize,
+    pub level: isize,
     pub parent: Option<FileItemPtr>, // the index of the parent in the Tree::fileitems
     pub last: bool,
     pub id: usize,
@@ -651,7 +651,7 @@ impl FileItem {
         Self {
             path,
             metadata,
-            level: 0,
+            level: -1,
             parent: None,
             last: false,
             id,
@@ -723,7 +723,7 @@ impl ColumnCell {
                         } else {
                             inversed_elements.push("│ ");
                         }
-
+                        inversed_elements.push(prefix.as_str());
                         parent = &pf.parent;
                         i = i + 1;
                     }

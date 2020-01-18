@@ -2,6 +2,7 @@ use crate::column::ColumnType;
 use crate::column::{ColumnCell, FileItem, FileItemPtr, GitStatus};
 use crate::errors::ArgError;
 use crate::fs_utils;
+use unicode_width::UnicodeWidthStr;
 use log::*;
 use nvim_rs::{
     exttypes::{Buffer, Window},
@@ -450,6 +451,7 @@ impl Tree {
         &mut self,
         nvim: &Neovim<W>,
         parent_idx: usize,
+        force: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let cur = match self.fileitems.get(parent_idx) {
             Some(c) => c,
@@ -469,14 +471,19 @@ impl Tree {
         }
 
         info!("remove range [{}, {})", start, end);
-        self.remove_items_and_cells(start, end)?;
-        let mut child_items = Vec::new();
-        self.entry_info_recursively(cur.clone(), &mut child_items, idx + 1)
-            .await?;
-        let child_item_size = child_items.len();
-        self.insert_items_and_cells(start, child_items)?;
+        let new_end;
+        if force {
+            self.remove_items_and_cells(start, end)?;
+            let mut child_items = Vec::new();
+            self.entry_info_recursively(cur.clone(), &mut child_items, idx + 1)
+                .await?;
+            let child_item_size = child_items.len();
+            self.insert_items_and_cells(start, child_items)?;
+            new_end = start + child_item_size;
+        } else {
+            new_end = end;
+        }
         // the new end after adding the new file
-        let new_end = start + child_item_size;
         info!("redraw range [{}, {})", start, new_end);
         // update lines (zero based)
         let ret = (start..new_end).map(|i| self.makeline(i)).collect();
@@ -485,6 +492,7 @@ impl Tree {
         self.hl_lines(&nvim, start, new_end).await?;
         Ok(())
     }
+
     pub async fn action_remove<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
         nvim: &Neovim<W>,
@@ -507,7 +515,7 @@ impl Tree {
         }
 
         // soft redraw a single line
-        self.update_cells(idx, idx+1);
+        self.update_cells(idx, idx + 1);
         let ret = vec![self.makeline(idx)];
         self.buf_set_lines(nvim, idx as i64, idx as i64 + 1, true, ret)
             .await?;
@@ -547,7 +555,7 @@ impl Tree {
         std::fs::rename(&cur.path, new_path)?;
         // TODO: no need to redraw the entire tree, we can redraw the parent and the target's
         // parent
-        self.redraw_subtree(nvim, 0).await?;
+        self.redraw_subtree(nvim, 0, true).await?;
 
         Ok(())
     }
@@ -595,7 +603,7 @@ impl Tree {
             fs::File::create(filename).await?;
         }
 
-        self.redraw_subtree(nvim, idx_to_redraw).await?;
+        self.redraw_subtree(nvim, idx_to_redraw, true).await?;
 
         Ok(())
     }
@@ -969,7 +977,7 @@ impl Tree {
                 cell.col_start = start;
 
                 // TODO: count grid for file name
-                cell.col_end = start + cell.text.len();
+                cell.col_end = start + UnicodeWidthStr::width(cell.text.as_str());
                 // NOTE: alignment
                 if *col == ColumnType::FILENAME {
                     let stop = KSTOP as i64 - cell.col_end as i64;
