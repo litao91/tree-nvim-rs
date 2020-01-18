@@ -112,7 +112,9 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             info!("creating new tree");
             let ns_id = Self::create_namespace(nvim.clone()).await?;
             let buf = Self::create_buf(data.clone(), nvim.clone()).await?;
+            // let start = std::time::Instant::now();
             Self::create_tree(data, nvim, buf, ns_id, &path, cfg_map).await?;
+            // info!("Create tree took {} secs", start.elapsed().as_secs_f64());
         } else {
             let bufnr_vals;
             let tree_cfg;
@@ -191,18 +193,22 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                     _ => return Err(Value::from("Error: path should be string")),
                 };
                 let data = self.data.clone();
+                /*
                 tokio::spawn(async move {
                     if let Err(e) = Self::start_tree(data, nvim, path, cfg_map).await {
                         error!("Start tree error: {:?}", e);
                     };
                 });
-                /*
+                Ok(Value::Nil)
+                */
+                let start = std::time::Instant::now();
                 match Self::start_tree(data, nvim, path, cfg_map).await {
                     Err(e) => Err(Value::from(format!("Error: {:?}", e))),
-                    _ => Ok(Value::Nil),
+                    _ => {
+                        info!("Start tree took {} secs", start.elapsed().as_secs_f64());
+                        Ok(Value::Nil)
+                    }
                 }
-                */
-                Ok(Value::Nil)
             }
             "_tree_get_candidate" => {
                 let buf = match nvim.get_current_buf().await {

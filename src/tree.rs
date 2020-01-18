@@ -984,9 +984,14 @@ impl Tree {
 
         let filemeta = fs::metadata(root_path_str).await?;
         let mut fileitems = vec![Arc::new(FileItem::new(root_path, filemeta, 0))];
+        let start = std::time::Instant::now();
         self.entry_info_recursively(fileitems[0].clone(), &mut fileitems, 1)
             .await?;
+        info!("get entry info took {} secs", start.elapsed().as_secs_f64());
+
+        let start = std::time::Instant::now();
         self.insert_items_and_cells(0, fileitems)?;
+        info!("insert entries took {} secs", start.elapsed().as_secs_f64());
 
         let ret = (0..self.fileitems.len())
             .map(|i| self.makeline(i))
@@ -996,7 +1001,9 @@ impl Tree {
             let win = Window::new(Value::from(0), nvim.clone());
             win.set_cursor((0, v as i64)).await?;
         }
+        let start = std::time::Instant::now();
         self.hl_lines(&nvim, 0, self.fileitems.len()).await?;
+        info!("hl took {} secs", start.elapsed().as_secs_f64());
         Ok(())
     }
 
@@ -1145,7 +1152,7 @@ impl Tree {
     ) -> Pin<Box<dyn Future<Output = Result<usize, Box<dyn std::error::Error>>> + 'a + Send>> {
         Box::pin(async move {
             let mut read_dir = fs::read_dir(&item.path).await?;
-            let mut entries = Vec::new();
+            let mut dir_entries = Vec::new();
             // filter: dirs, files, no dot and dot dot
             while let Some(entry) = read_dir.next_entry().await? {
                 // skip hidden file or dot or dot dot
@@ -1154,12 +1161,14 @@ impl Tree {
                 {
                     continue;
                 }
-                let metadata = entry.metadata().await?;
-                entries.push((entry, metadata));
+                dir_entries.push(entry);
+                // entries.push((entry, metadata));
             }
-            if entries.len() <= 0 {
+            if dir_entries.len() <= 0 {
                 return Ok(start_id);
             }
+            let metadata = futures::future::join_all(dir_entries.iter().map(|x| {x.metadata()})).await.into_iter().map(|x| x.unwrap());
+            let mut entries: Vec<_> = dir_entries.into_iter().zip(metadata.into_iter()).collect();
             // directory first, name order
             entries.sort_by(|l, r| {
                 if l.1.is_dir() && !r.1.is_dir() {

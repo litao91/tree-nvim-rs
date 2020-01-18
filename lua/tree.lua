@@ -7,8 +7,8 @@ local cmd = vim.api.nvim_command
 -- @param bufnrs table: trees bufnrs ordered by recently used.
 -- @return nil.
 function resume(bufnrs, cfg)
-    print("bufnrs", vim.inspect(bufnrs))
-    print("cfg", vim.inspect(cfg))
+    -- print("bufnrs", vim.inspect(bufnrs))
+    -- print("cfg", vim.inspect(cfg))
 
     if bufnrs == nil then
         return
@@ -28,14 +28,14 @@ function resume(bufnrs, cfg)
             table.insert(deadbufs, bufnr)
         end
     end
-    print("treebufs:", vim.inspect(treebufs))
+    -- print("treebufs:", vim.inspect(treebufs))
 
     local find = false
     -- TODO: send delete notify when -1.
     for i, bufnr in pairs(treebufs) do
         winid = call('bufwinid', {bufnr})
         if winid > 0 then
-            print('goto winid', winid)
+            -- print('goto winid', winid)
             call('win_gotoid', {winid})
             find = true
             break
@@ -70,11 +70,11 @@ function resume(bufnrs, cfg)
 
     -- not nil => true
     if not find then
-        print('split cmd:', str)
+        -- print('split cmd:', str)
         cmd(str)
     end
 
-    print("resize_cmd", vim.inspect(resize_cmd))
+    -- print("resize_cmd", vim.inspect(resize_cmd))
     cmd(resize_cmd)
 
     cmd("se nonu");

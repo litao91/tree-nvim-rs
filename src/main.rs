@@ -24,7 +24,7 @@ fn init_logging() -> Result<(), Box<dyn Error>> {
     use std::fs::File;
 
     let log_level_filter = match env::var("LOG_LEVEL")
-        .unwrap_or(String::from("trace"))
+        .unwrap_or(String::from("error"))
         .to_lowercase()
         .as_ref()
     {
