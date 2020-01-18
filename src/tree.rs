@@ -15,7 +15,6 @@ use std::convert::From;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use tokio::fs;
 use unicode_width::UnicodeWidthStr;
 
 #[derive(Default, Debug, Clone)]
@@ -476,8 +475,7 @@ impl Tree {
         if force {
             self.remove_items_and_cells(start, end)?;
             let mut child_items = Vec::new();
-            self.entry_info_recursively(cur.clone(), &mut child_items, idx + 1)
-                .await?;
+            self.entry_info_recursively_sync(cur.clone(), &mut child_items, idx + 1)?;
             let child_item_size = child_items.len();
             self.insert_items_and_cells(start, child_items)?;
             new_end = start + child_item_size;
@@ -536,9 +534,9 @@ impl Tree {
         }
         for target in targets {
             if target.metadata.is_dir() {
-                fs::remove_dir_all(&target.path).await?;
+                std::fs::remove_dir_all(&target.path)?;
             } else {
-                fs::remove_file(&target.path).await?;
+                std::fs::remove_file(&target.path)?;
             }
         }
         // redraw the entire tree
@@ -640,12 +638,12 @@ impl Tree {
             return Err(Box::new(ArgError::new("File exists!")));
         }
         if is_dir {
-            fs::create_dir(filename).await?;
+            std::fs::create_dir(filename)?;
         } else {
             let mut parent = filename.clone();
             parent.pop();
-            fs::create_dir_all(parent).await?;
-            fs::File::create(filename).await?;
+            std::fs::create_dir_all(parent);
+            std::fs::File::create(filename);
         }
 
         self.redraw_subtree(nvim, idx_to_redraw, true).await?;
@@ -842,8 +840,7 @@ impl Tree {
 
         if cur.metadata.is_dir() && !is_opened {
             let mut child_fileitem = Vec::new();
-            self.entry_info_recursively(cur.clone(), &mut child_fileitem, idx + 1)
-                .await?;
+            self.entry_info_recursively_sync(cur.clone(), &mut child_fileitem, idx + 1)?;
             self.expand_store.insert(path_str.to_owned(), true);
             // icon should be open
             self.update_cells(idx, idx + 1);
@@ -962,7 +959,7 @@ impl Tree {
         if !path.is_dir() {
             return Ok(());
         }
-        let root_path = fs::canonicalize(path).await?;
+        let root_path = std::fs::canonicalize(path)?;
         let root_path_str = if let Some(p) = root_path.to_str() {
             p
         } else {
@@ -982,11 +979,12 @@ impl Tree {
         self.col_map.clear();
         self.fileitems.clear();
 
-        let filemeta = fs::metadata(root_path_str).await?;
+        let filemeta = std::fs::metadata(root_path_str)?;
         let mut fileitems = vec![Arc::new(FileItem::new(root_path, filemeta, 0))];
         let start = std::time::Instant::now();
-        self.entry_info_recursively(fileitems[0].clone(), &mut fileitems, 1)
-            .await?;
+        // self.entry_info_recursively(fileitems[0].clone(), &mut fileitems, 1)
+        //    .await?;
+        self.entry_info_recursively_sync(fileitems[0].clone(), &mut fileitems, 1)?;
         info!("get entry info took {} secs", start.elapsed().as_secs_f64());
 
         let start = std::time::Instant::now();
@@ -1144,6 +1142,61 @@ impl Tree {
         Ok(())
     }
 
+    fn entry_info_recursively_sync<'a>(
+        &'a self,
+        item: Arc<FileItem>,
+        fileitem_lst: &'a mut Vec<FileItemPtr>,
+        mut start_id: usize,
+    ) -> Result<usize, Box<dyn std::error::Error>> {
+        let mut entries: Vec<_> = std::fs::read_dir(&item.path)?
+            .map(|x| x.unwrap())
+            .filter(|x| {
+                self.config.show_ignored_files
+                    || !(x.file_name().to_str().unwrap().starts_with('.'))
+            })
+            .map(|x| {
+                let meta = x.metadata().unwrap();
+                (x, meta)
+            })
+            .collect();
+        entries.sort_by(|l, r| {
+            if l.1.is_dir() && !r.1.is_dir() {
+                Ordering::Less
+            } else if !l.1.is_dir() && r.1.is_dir() {
+                Ordering::Greater
+            } else {
+                l.0.file_name().cmp(&r.0.file_name())
+            }
+        });
+        let level = item.level + 1;
+        let mut i = 0;
+        let count = entries.len();
+        for entry in entries {
+            let mut fileitem =
+                FileItem::new(std::fs::canonicalize(entry.0.path())?, entry.1, start_id);
+            start_id += 1;
+            fileitem.level = level;
+            fileitem.parent = Some(item.clone());
+            if i == count - 1 {
+                fileitem.last = true;
+            }
+            i += 1;
+            if let Some(expand) = self.expand_store.get(fileitem.path.to_str().unwrap()) {
+                if *expand {
+                    let ft_ptr = Arc::new(fileitem);
+                    fileitem_lst.push(ft_ptr.clone());
+                    start_id =
+                        self.entry_info_recursively_sync(ft_ptr.clone(), fileitem_lst, start_id)?
+                } else {
+                    fileitem_lst.push(Arc::new(fileitem));
+                }
+            } else {
+                fileitem_lst.push(Arc::new(fileitem));
+            }
+        }
+        Ok(start_id)
+    }
+
     fn entry_info_recursively<'a>(
         &'a self,
         item: Arc<FileItem>,
@@ -1151,7 +1204,7 @@ impl Tree {
         mut start_id: usize,
     ) -> Pin<Box<dyn Future<Output = Result<usize, Box<dyn std::error::Error>>> + 'a + Send>> {
         Box::pin(async move {
-            let mut read_dir = fs::read_dir(&item.path).await?;
+            let mut read_dir = tokio::fs::read_dir(&item.path).await?;
             let mut dir_entries = Vec::new();
             // filter: dirs, files, no dot and dot dot
             while let Some(entry) = read_dir.next_entry().await? {
@@ -1167,7 +1220,10 @@ impl Tree {
             if dir_entries.len() <= 0 {
                 return Ok(start_id);
             }
-            let metadata = futures::future::join_all(dir_entries.iter().map(|x| {x.metadata()})).await.into_iter().map(|x| x.unwrap());
+            let metadata = futures::future::join_all(dir_entries.iter().map(|x| x.metadata()))
+                .await
+                .into_iter()
+                .map(|x| x.unwrap());
             let mut entries: Vec<_> = dir_entries.into_iter().zip(metadata.into_iter()).collect();
             // directory first, name order
             entries.sort_by(|l, r| {
@@ -1184,7 +1240,7 @@ impl Tree {
             let count = entries.len();
             for entry in entries {
                 let mut fileitem =
-                    FileItem::new(fs::canonicalize(entry.0.path()).await?, entry.1, start_id);
+                    FileItem::new(tokio::fs::canonicalize(entry.0.path()).await?, entry.1, start_id);
                 start_id += 1;
                 fileitem.level = level;
                 fileitem.parent = Some(item.clone());
@@ -1197,8 +1253,7 @@ impl Tree {
                         let ft_ptr = Arc::new(fileitem);
                         fileitem_lst.push(ft_ptr.clone());
                         start_id = self
-                            .entry_info_recursively(ft_ptr.clone(), fileitem_lst, start_id)
-                            .await?;
+                            .entry_info_recursively_sync(ft_ptr.clone(), fileitem_lst, start_id)?;
                     } else {
                         fileitem_lst.push(Arc::new(fileitem));
                     }
