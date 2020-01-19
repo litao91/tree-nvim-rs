@@ -375,6 +375,7 @@ impl Tree {
             "rename" => self.action_rename(nvim, args, ctx).await,
             "toggle_select" => self.action_toggle_select(nvim, args, ctx).await,
             "remove" => self.action_remove(nvim, args, ctx).await,
+            "toggle_ignored_files" => self.action_show_ignored(nvim, args, ctx).await,
             _ => {
                 error!("Unknown action: {}", action);
                 return;
@@ -489,6 +490,17 @@ impl Tree {
         self.buf_set_lines(nvim, start as i64, end as i64, true, ret)
             .await?;
         self.hl_lines(&nvim, start, new_end).await?;
+        Ok(())
+    }
+
+    pub async fn action_show_ignored<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        _arg: Value,
+        _ctx: Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.config.show_ignored_files = !self.config.show_ignored_files;
+        self.redraw_subtree(nvim, 0, true).await?;
         Ok(())
     }
 
@@ -1241,8 +1253,11 @@ impl Tree {
             let mut i = 0;
             let count = entries.len();
             for entry in entries {
-                let mut fileitem =
-                    FileItem::new(tokio::fs::canonicalize(entry.0.path()).await?, entry.1, start_id);
+                let mut fileitem = FileItem::new(
+                    tokio::fs::canonicalize(entry.0.path()).await?,
+                    entry.1,
+                    start_id,
+                );
                 start_id += 1;
                 fileitem.level = level;
                 fileitem.parent = Some(item.clone());
@@ -1254,8 +1269,11 @@ impl Tree {
                     if *expand {
                         let ft_ptr = Arc::new(fileitem);
                         fileitem_lst.push(ft_ptr.clone());
-                        start_id = self
-                            .entry_info_recursively_sync(ft_ptr.clone(), fileitem_lst, start_id)?;
+                        start_id = self.entry_info_recursively_sync(
+                            ft_ptr.clone(),
+                            fileitem_lst,
+                            start_id,
+                        )?;
                     } else {
                         fileitem_lst.push(Arc::new(fileitem));
                     }
