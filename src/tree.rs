@@ -1,13 +1,12 @@
 use crate::column::ColumnType;
 use crate::column::{ColumnCell, FileItem, FileItemPtr, GitStatus};
 use crate::errors::ArgError;
-use crate::fs_utils;
 use log::*;
 use nvim_rs::{
     exttypes::{Buffer, Window},
-    runtime::AsyncWrite,
     Neovim, Value,
 };
+use futures::io::AsyncWrite;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -1211,6 +1210,7 @@ impl Tree {
         Ok(start_id)
     }
 
+    /*
     fn entry_info_recursively<'a>(
         &'a self,
         item: Arc<FileItem>,
@@ -1284,6 +1284,7 @@ impl Tree {
             Ok(start_id)
         })
     }
+    */
 
     fn makeline(&self, pos: usize) -> String {
         let mut start = 0;
@@ -1323,7 +1324,7 @@ impl Tree {
                     let icon_ns_id = self.icon_ns_id;
                     let start = cell.byte_start as i64;
                     let end = (cell.byte_start + cell.text.len()) as i64;
-                    tokio::spawn(async move {
+                    async_std::task::spawn(async move {
                         let hl_group = hl_group;
                         buf.add_highlight(icon_ns_id, &hl_group, i as i64, start, end)
                             .await

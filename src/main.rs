@@ -1,20 +1,23 @@
 use crate::tree::Tree;
 use async_trait::async_trait;
+use futures::io::{AsyncReadExt, WriteHalf};
+use async_std;
 use backtrace::Backtrace;
 use fork::{daemon, Fork};
+use futures::io::AsyncWrite;
 use log::*;
-use nvim_rs::{create, exttypes::Buffer, runtime::Command, Handler, Neovim, Value};
+
+#[cfg(unix)]
+use async_std::os::unix::net::UnixStream;
+use nvim_rs::{
+    create::async_std as create,
+    Neovim, Value,
+};
 use simplelog::{ConfigBuilder, LevelFilter, WriteLogger};
-use std::collections::HashMap;
-use std::convert::Into;
 use std::env;
 use std::error::Error;
-use std::sync::Arc;
-use tokio::io::WriteHalf;
-use tokio::net::UnixStream;
 mod column;
 mod errors;
-mod fs_utils;
 mod tree;
 mod tree_handler;
 use tree_handler::TreeHandler;
@@ -69,7 +72,7 @@ fn panic_hook() {
 
 async fn init_channel<T>(nvim: &Neovim<T>)
 where
-    T: Sync + Send + Unpin + tokio::io::AsyncWrite,
+    T: Sync + Send + Unpin + AsyncWrite,
 {
     let chan = nvim.get_api_info().await.unwrap()[0].as_i64().unwrap();
     nvim.set_var("tree#_channel_id", Value::from(chan))
@@ -106,8 +109,7 @@ async fn run(args: Vec<String>) {
     .unwrap();
     init_channel(&nvim).await;
     match io_handler.await {
-        Err(joinerr) => error!("Error joining IO loop '{}'", joinerr),
-        Ok(Err(err)) => {
+        Err(err) => {
             if !err.is_reader_error() {
                 // One last try, since there wasn't an error with writing to the stream
                 nvim.err_writeln(&format!("Error: '{}'", err))
@@ -128,11 +130,11 @@ async fn run(args: Vec<String>) {
                 error!("Error: '{}'", err);
             }
         }
-        Ok(Ok(())) => {}
+        Ok(()) => {}
     }
 }
 
-#[tokio::main]
+#[async_std::main]
 async fn main() {
     init_logging().unwrap();
     panic_hook();
@@ -148,11 +150,6 @@ async fn main() {
         run(args).await;
         debug!("Done!");
     } else {
-        debug!("demonalizing");
-        if let Ok(Fork::Child) = daemon(false, false) {
-            args.push("--nofork".to_string());
-            let _ = Command::new(&args[0]).args(&args[1..]).spawn().unwrap();
-        }
-        info!("Return from parent!");
+        unimplemented!();
     }
 }

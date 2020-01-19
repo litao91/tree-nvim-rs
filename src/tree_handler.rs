@@ -4,7 +4,8 @@ use crate::tree::Tree;
 use async_std::sync::RwLock;
 use async_trait::async_trait;
 use log::*;
-use nvim_rs::{exttypes::Buffer, runtime::AsyncWrite, Handler, Neovim, Value};
+use nvim_rs::{exttypes::Buffer, Handler, Neovim, Value};
+use futures::io::AsyncWrite;
 use std::collections::HashMap;
 use std::convert::From;
 use std::sync::Arc;
@@ -24,6 +25,15 @@ type TreeHandlerDataPtr = Arc<RwLock<TreeHandlerData>>;
 pub struct TreeHandler<W: AsyncWrite + Send + Sync + Unpin + 'static> {
     _phantom: Option<W>, // ugly, but otherwise the compiler will complain, need to workout a more elegant way
     data: TreeHandlerDataPtr,
+}
+
+impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Clone for TreeHandler<W>  {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+            _phantom: Default::default(),
+        }
+    }
 }
 
 impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Default for TreeHandler<W> {
@@ -70,7 +80,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         }
         // let start = std::time::Instant::now();
         let args = vec![Value::Ext(bufnr.0, bufnr.1), tree_cfg];
-        tokio::spawn(async move {
+        async_std::task::spawn(async move {
             nvim.execute_lua("resume(...)", args).await.unwrap();
         });
         // info!("resume took: {} secs", start.elapsed().as_secs_f64());
