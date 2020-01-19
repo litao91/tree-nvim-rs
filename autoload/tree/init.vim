@@ -26,12 +26,12 @@ function! tree#init#_channel() abort
   endif
 
   " TODO: temporary, ~ cant work
-  if has('unix') && !has('macunix') && !has('win32unix')
+  if has('unix') && !has('win32unix')
     let cmds = [s:project_root . '/bin/tree-nvim', '--server', v:servername, '--nofork']
   elseif tree#util#is_windows()
     let cmds = [s:project_root . '\bin\tree-nvim.exe', '--server', v:servername]
   else
-    let cmds = [s:project_root . '/bin/tree-nvim.app/Contents/MacOS/tree-nvim', '--server', v:servername]
+    let cmds = [s:project_root . '/bin/tree-nvim', '--server', v:servername]
   endif
   echom string(cmds)
   call jobstart(cmds)
