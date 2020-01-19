@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 # nvim-rs = "0.1.0"
 # TODO: use the version in crate.io. Currently only the master version has the working socket connection
-nvim-rs = { path = "/data00/litao.91/repos/nvim-rs", features=["use_async-std"] }
+nvim-rs = { path = "nvim-rs", features=["use_async-std"] }
 # tokio = { version = "0.2.9", features = ["sync", "rt-core", "macros", "io-util", "tcp", "uds", "process", "io-std", "dns", "rt-threaded", "io-driver", "fs"] }
 path-clean = "0.1.0"
 async-trait = "0.1.18"
