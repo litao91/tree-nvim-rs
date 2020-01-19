@@ -1199,8 +1199,7 @@ impl Tree {
         let mut i = 0;
         let count = entries.len();
         for entry in entries {
-            let mut fileitem =
-                FileItem::new(absolute_path(entry.0.path())?, entry.1, start_id);
+            let mut fileitem = FileItem::new(absolute_path(entry.0.path())?, entry.1, start_id);
             start_id += 1;
             fileitem.level = level;
             fileitem.parent = Some(item.clone());

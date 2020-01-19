@@ -3,9 +3,9 @@ use crate::tree::Context;
 use crate::tree::Tree;
 use async_std::sync::RwLock;
 use async_trait::async_trait;
+use futures::io::AsyncWrite;
 use log::*;
 use nvim_rs::{exttypes::Buffer, Handler, Neovim, Value};
-use futures::io::AsyncWrite;
 use std::collections::HashMap;
 use std::convert::From;
 use std::sync::Arc;
@@ -27,7 +27,7 @@ pub struct TreeHandler<W: AsyncWrite + Send + Sync + Unpin + 'static> {
     data: TreeHandlerDataPtr,
 }
 
-impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Clone for TreeHandler<W>  {
+impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Clone for TreeHandler<W> {
     fn clone(&self) -> Self {
         Self {
             data: self.data.clone(),

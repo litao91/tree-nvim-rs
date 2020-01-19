@@ -14,7 +14,7 @@ Inspired by [tree.nvim](https://github.com/zgpio/tree.nvim) and Defx, in fact th
 - [x] rename
 - [x] delete
 - [x] toggle hidden files
-- [ ] toggle
+- [x] toggle
 - [ ] yank_path
 - [ ] open/close recursively
 - [x] selection

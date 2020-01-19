@@ -1,18 +1,15 @@
 use crate::tree::Tree;
-use async_trait::async_trait;
-use futures::io::{AsyncReadExt, WriteHalf};
 use async_std;
+use async_trait::async_trait;
 use backtrace::Backtrace;
 use fork::{daemon, Fork};
 use futures::io::AsyncWrite;
+use futures::io::{AsyncReadExt, WriteHalf};
 use log::*;
 
 #[cfg(unix)]
 use async_std::os::unix::net::UnixStream;
-use nvim_rs::{
-    create::async_std as create,
-    Neovim, Value,
-};
+use nvim_rs::{create::async_std as create, Neovim, Value};
 use simplelog::{ConfigBuilder, LevelFilter, WriteLogger};
 use std::env;
 use std::error::Error;
@@ -53,7 +50,11 @@ fn init_logging() -> Result<(), Box<dyn Error>> {
         Ok(path) => path.to_owned(),
     };
 
-    let log_file = std::fs::OpenOptions::new().write(true).create(true).append(true).open(filepath)?;
+    let log_file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(filepath)?;
 
     WriteLogger::init(log_level_filter, config, log_file)?;
 
