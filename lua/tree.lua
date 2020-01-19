@@ -1,7 +1,7 @@
 local buf_is_loaded = vim.api.nvim_buf_is_loaded
 local call = vim.api.nvim_call_function
 local cmd = vim.api.nvim_command
---- Resume tree window.
+-- Resume tree window.
 -- If the window corresponding to bufnrs is available, goto it;
 -- otherwise, create a new window.
 -- @param bufnrs table: trees bufnrs ordered by recently used.

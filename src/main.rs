@@ -24,10 +24,9 @@ use tree_handler::TreeHandler;
 
 fn init_logging() -> Result<(), Box<dyn Error>> {
     use std::env::VarError;
-    use std::fs::File;
 
     let log_level_filter = match env::var("LOG_LEVEL")
-        .unwrap_or(String::from("error"))
+        .unwrap_or(String::from("info"))
         .to_lowercase()
         .as_ref()
     {
@@ -54,9 +53,9 @@ fn init_logging() -> Result<(), Box<dyn Error>> {
         Ok(path) => path.to_owned(),
     };
 
-    let log_file = File::create(filepath)?;
+    let log_file = std::fs::OpenOptions::new().write(true).create(true).append(true).open(filepath)?;
 
-    WriteLogger::init(log_level_filter, config, log_file).unwrap();
+    WriteLogger::init(log_level_filter, config, log_file)?;
 
     Ok(())
 }
@@ -136,9 +135,9 @@ async fn run(args: Vec<String>) {
 
 #[async_std::main]
 async fn main() {
-    init_logging().unwrap();
+    let _ = init_logging();
     panic_hook();
-    let mut args: Vec<String> = env::args().collect();
+    let args: Vec<String> = env::args().collect();
     let mut nofork = false;
     for arg in &args {
         if arg == "--nofork" {
