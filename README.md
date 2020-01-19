@@ -8,14 +8,26 @@ Inspired by [tree.nvim](https://github.com/zgpio/tree.nvim) and Defx, in fact th
 * The binary size is much smaller than `tree.nvim` , due to the QT dependency, the binary of `tree.nvim` is added up to more than 30M
 
 ## TODO
+
+- [x] cd
+- [ ] copy
+- [x] drop
+- [ ] move
+- [ ] open
+- [ ] multi
+- [ ] remove_trash
 - [x] create tree
 - [x] open/close, open or close
 - [x] new_file
 - [x] rename
 - [x] delete
 - [x] toggle hidden files
-- [x] toggle
+- [x] toggle select
+- [ ] toggle select all
+- [ ] clear select all
 - [ ] yank_path
 - [ ] open/close recursively
 - [x] selection
 - [ ] resize
+- [ ] git status
+- [ ] search
