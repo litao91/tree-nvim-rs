@@ -1,6 +1,36 @@
 local buf_is_loaded = vim.api.nvim_buf_is_loaded
 local call = vim.api.nvim_call_function
 local cmd = vim.api.nvim_command
+
+function quit(bufnr, cfg)
+  -- print('quit')
+  winnr = call('bufwinnr', bufnr)
+  -- print('winnr: ', winnr)
+  if winnr < 0 then
+    return
+  end
+  prev_winid = 0
+  if winnr ~= call('winnr', {}) then
+    prev_winid = call('win_getid')
+  end
+
+  -- move to the tree's win
+  cmd(string.format('%dwincmd w', winnr))
+  if cfg.split == 'no' or cfg.split == 'tab' then
+    if call('bufexists', cfg.prev_bufnr) and cfg.prev_bufnr ~= call('bufnr', '%') then
+      cmd(string.format(string.format('buffer %d', cfg.prev_bufnr)))
+    else
+      cmd('enew')
+    end
+  else
+    if call('winnr', {'$'}) ~= 1 then
+      cmd('close')
+      call('win_gotoid', {prev_winid})
+    else
+      call('enew', {})
+    end
+  end
+end
 -- Resume tree window.
 -- If the window corresponding to bufnrs is available, goto it;
 -- otherwise, create a new window.
@@ -70,8 +100,10 @@ function resume(bufnrs, cfg)
 
     -- not nil => true
     if not find then
-        -- print('split cmd:', str)
-        cmd(str)
+      -- print('split cmd:', str)
+      cmd(str)
+    elseif cfg.toggle then
+      quit({bufnr}, cfg)
     end
 
     -- print("resize_cmd", vim.inspect(resize_cmd))
