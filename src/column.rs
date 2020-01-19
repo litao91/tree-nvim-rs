@@ -88,7 +88,7 @@ pub enum Icon {
     Font,
     Text,
     Archive,
-    Unknonwn,
+    Unknown,
 }
 
 impl From<&str> for Icon {
@@ -229,7 +229,7 @@ impl From<&str> for Icon {
             "ppt" => Icon::Ppt,
             "pptx" => Icon::Ppt,
             "pptm" => Icon::Ppt,
-            _ => Icon::Unknonwn,
+            _ => Icon::Unknown,
         }
     }
 }
@@ -237,7 +237,7 @@ impl From<&str> for Icon {
 impl Icon {
     pub fn hl_group_name(&self) -> &str {
         match *self {
-            Icon::FolderClosed => "FolderClosed",
+            Icon::FolderClosed => "tree_icon_FolderClosed",
             Icon::FolderOpened => "tree_icon_FolderOpened",
             Icon::FolderSymlink => "tree_icon_FolderSymlink",
             Icon::File => "tree_icon_File",
@@ -320,7 +320,7 @@ impl Icon {
             Icon::Font => "tree_icon_Font",
             Icon::Text => "tree_icon_Text",
             Icon::Archive => "tree_icon_Archive",
-            Icon::Unknonwn => "tree_icon_Unknonwn",
+            Icon::Unknown => "tree_icon_Unknonwn",
         }
     }
     pub fn as_glyph_and_color(&self) -> (&str, &str) {
@@ -408,7 +408,7 @@ impl Icon {
             Icon::Font => ("", "#999999"),
             Icon::Text => ("", "#999999"),
             Icon::Archive => ("", "#cc3e44"),
-            Icon::Unknonwn => (" ", "#999999"),
+            Icon::Unknown => ("", "#999999"),
         }
     }
 }
@@ -516,7 +516,7 @@ pub static ICONS: &[Icon] = &[
     Icon::Font,
     Icon::Text,
     Icon::Archive,
-    Icon::Unknonwn,
+    Icon::Unknown,
 ];
 
 pub static GIT_INDICATORS: &[&[&'static str]] = &[
@@ -737,7 +737,7 @@ impl ColumnCell {
             }
             ColumnType::ICON => {
                 if fileitem.metadata.is_dir() {
-                    text = String::from(" ");
+                    text = String::new();
                     let dir_opened = match fileitem.path.to_str() {
                         Some(p) => tree.is_item_opened(p),
                         None => false,
@@ -753,22 +753,16 @@ impl ColumnCell {
                         }
                         hl_group = Some(icon.hl_group_name().to_owned());
                         text.push_str(icon.as_glyph_and_color().0);
-                        text.push(' ');
                     }
                 } else {
                     let extension_icon = match fileitem.extension() {
                         Some(extension) => Icon::from(extension),
-                        None => Icon::Unknonwn,
+                        None => Icon::Unknown,
                     };
-                    if extension_icon != Icon::Unknonwn {
-                        hl_group = Some(extension_icon.hl_group_name().to_owned());
-                        text = extension_icon.as_glyph_and_color().0.to_owned();
-                        text.push(' ');
-                    } else {
-                        text = String::from(" ");
-                        hl_group = Some(Icon::File.hl_group_name().to_owned());
-                    }
+                    hl_group = Some(extension_icon.hl_group_name().to_owned());
+                    text = extension_icon.as_glyph_and_color().0.to_owned();
                 }
+                text.push(' ');
             }
             ColumnType::FILENAME => {
                 hl_group = Some(GuiColor::YELLOW.hl_group_name().to_owned());
