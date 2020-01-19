@@ -33,7 +33,7 @@ function! tree#init#_channel() abort
   else
     let cmds = [s:project_root . '/bin/tree-nvim', '--server', v:servername]
   endif
-  echom string(cmds)
+  " echom string(cmds)
   call jobstart(cmds)
   let N = 15
   let i = 0
@@ -41,7 +41,7 @@ function! tree#init#_channel() abort
     sleep 10m
     let i += 1
   endwhile
-  echom printf('Wait for server %dms', i*10)
+  " echom printf('Wait for server %dms', i*10)
   return v:true
   " call tree#util#print_error(v:exception)
   " call tree#util#print_error(v:throwpoint)
