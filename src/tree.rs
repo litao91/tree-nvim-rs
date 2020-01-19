@@ -1,20 +1,34 @@
 use crate::column::ColumnType;
 use crate::column::{ColumnCell, FileItem, FileItemPtr, GitStatus};
 use crate::errors::ArgError;
+use futures::io::AsyncWrite;
 use log::*;
 use nvim_rs::{
     exttypes::{Buffer, Window},
     Neovim, Value,
 };
-use futures::io::AsyncWrite;
+use path_clean::PathClean;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::From;
-use std::future::Future;
-use std::pin::Pin;
+use std::env;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use unicode_width::UnicodeWidthStr;
+
+pub fn absolute_path<P>(path: P) -> io::Result<PathBuf>
+where
+    P: AsRef<Path>,
+{
+    let path = path.as_ref();
+    if path.is_absolute() {
+        Ok(path.to_path_buf().clean())
+    } else {
+        Ok(env::current_dir()?.join(path).clean())
+    }
+}
 
 #[derive(Default, Debug, Clone)]
 pub struct Context {
@@ -970,7 +984,7 @@ impl Tree {
         if !path.is_dir() {
             return Ok(());
         }
-        let root_path = std::fs::canonicalize(path)?;
+        let root_path = absolute_path(path)?;
         let root_path_str = if let Some(p) = root_path.to_str() {
             p
         } else {
@@ -1186,7 +1200,7 @@ impl Tree {
         let count = entries.len();
         for entry in entries {
             let mut fileitem =
-                FileItem::new(std::fs::canonicalize(entry.0.path())?, entry.1, start_id);
+                FileItem::new(absolute_path(entry.0.path())?, entry.1, start_id);
             start_id += 1;
             fileitem.level = level;
             fileitem.parent = Some(item.clone());
