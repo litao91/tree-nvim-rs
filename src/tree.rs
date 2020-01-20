@@ -409,7 +409,7 @@ impl Tree {
                                 status.status(),
                             );
                         }
-                        info!("{:?}", self.git_map);
+                        info!("git_map: {:?}", self.git_map);
                     }
                     Err(e) => error!("Fail to get status: {:?}", e),
                 }

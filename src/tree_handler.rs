@@ -147,6 +147,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
                     None => return Err(Box::new(ArgError::new("unknown tree"))),
                 };
                 tree.config.update(&cfg_map)?;
+                tree.update_git_map();
                 tree_cfg = tree.config.get_cfg_map();
                 d.treebufs.retain(|v| v != &prev_bufnr);
                 d.treebufs.push(prev_bufnr);

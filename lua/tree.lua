@@ -27,7 +27,7 @@ function quit(bufnr, cfg)
       cmd('close')
       call('win_gotoid', {prev_winid})
     else
-      call('enew', {})
+      cmd('enew')
     end
   end
 end
