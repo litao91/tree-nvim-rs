@@ -1,6 +1,7 @@
 use crate::errors::ArgError;
 use crate::tree::Context;
 use crate::tree::Tree;
+use async_std::sync::Arc;
 use async_std::sync::RwLock;
 use async_trait::async_trait;
 use futures::io::AsyncWrite;
@@ -8,7 +9,6 @@ use log::*;
 use nvim_rs::{exttypes::Buffer, Handler, Neovim, Value};
 use std::collections::HashMap;
 use std::convert::From;
-use async_std::sync::Arc;
 
 #[derive(Default, Debug)]
 pub struct TreeHandlerData {
