@@ -622,6 +622,7 @@ impl GuiColor {
     }
 }
 
+#[derive(Debug)]
 pub enum GitStatus {
     Untracked,
     Modified,
