@@ -521,7 +521,6 @@ impl Tree {
         parent_idx: usize,
         force: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        self.update_git_map();
         let cur = match self.fileitems.get(parent_idx) {
             Some(c) => c,
             None => return Err(Box::new(ArgError::new("Invalid index"))),
@@ -1004,6 +1003,7 @@ impl Tree {
     }
 
     pub fn update_cells(&mut self, sl: usize, el: usize) {
+        self.update_git_map();
         let cells = self.make_cells(&self.fileitems[sl..el], sl == 0);
         for (col, cells) in cells {
             if !self.col_map.contains_key(&col) {
