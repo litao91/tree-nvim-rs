@@ -1,4 +1,5 @@
 use crate::tree::Tree;
+use git2::Status;
 use std::convert::From;
 use std::ffi::OsStr;
 use std::fs::Metadata;
@@ -519,16 +520,18 @@ pub static ICONS: &[Icon] = &[
     Icon::Unknown,
 ];
 
-pub static GIT_INDICATORS: &[&[&'static str]] = &[
-    &["✭", "#FFFFFF"], // Untracked
-    &["✹", "#fabd2f"], // Modified
-    &["✚", "#b8bb26"], // Staged
-    &["➜", "#fabd2f"], // Renamed
-    &["☒", "#FFFFFF"], // Ignored
-    &["═", "#fb4934"], // Unmerged
-    &["✖", "#fb4934"], // Deleted
-    &["?", "#FFFFFF"],   // Unknown
-];
+fn get_git_indicator(status: Status) -> (&'static str, GuiColor) {
+    match status {
+        Status::WT_NEW => ("✭", GuiColor::WHITE),
+        Status::WT_MODIFIED => ("✹", GuiColor::YELLOW),
+        Status::WT_TYPECHANGE => ("✚", GuiColor::GREEN),
+        Status::WT_RENAMED => ("➜", GuiColor::YELLOW),
+        Status::IGNORED => ("☒", GuiColor::WHITE),
+        Status::CONFLICTED => ("═", GuiColor::RED),
+        Status::WT_DELETED => ("✖", GuiColor::RED),
+        _ => ("?", GuiColor::WHITE),
+    }
+}
 
 static READ_ONLY_ICON: &'static str = "✗";
 static SELECTED_ICON: &'static str = "✓";
@@ -623,18 +626,6 @@ impl GuiColor {
 }
 
 #[derive(Debug)]
-pub enum GitStatus {
-    Untracked,
-    Modified,
-    Staged,
-    Renamed,
-    Ignored,
-    Unmerged,
-    Deleted,
-    Unknown,
-}
-
-#[derive(Debug)]
 pub struct FileItem {
     pub path: std::path::PathBuf,
     pub metadata: Metadata,
@@ -677,6 +668,7 @@ impl ColumnCell {
     pub fn new(tree: &Tree, fileitem: &FileItem, ty: ColumnType, is_root_cell: bool) -> Self {
         let mut text = String::new();
         let mut hl_group = None;
+        let path_str = fileitem.path.to_str().unwrap();
         match ty {
             ColumnType::MARK => {
                 if fileitem.metadata.permissions().readonly() {
@@ -734,15 +726,18 @@ impl ColumnCell {
                 }
             }
             ColumnType::GIT => {
-                // unimplemented
+                if let Some(status) = tree.git_map.get(path_str) {
+                    let (icon, color) = get_git_indicator(*status);
+                    text = String::from(icon);
+                    hl_group = Some(color.hl_group_name().to_owned());
+                } else {
+                    text = String::from(" ");
+                }
             }
             ColumnType::ICON => {
                 if fileitem.metadata.is_dir() {
                     text = String::new();
-                    let dir_opened = match fileitem.path.to_str() {
-                        Some(p) => tree.is_item_opened(p),
-                        None => false,
-                    };
+                    let dir_opened = tree.is_item_opened(path_str);
                     if !is_root_cell {
                         let icon;
                         if dir_opened {
@@ -769,7 +764,7 @@ impl ColumnCell {
                 hl_group = Some(GuiColor::YELLOW.hl_group_name().to_owned());
                 if is_root_cell {
                     text = tree.config.root_marker.clone();
-                    text.push_str(fileitem.path.to_str().unwrap());
+                    text.push_str(path_str);
                 } else {
                     text = String::from(fileitem.path.file_name().and_then(OsStr::to_str).unwrap());
                     if fileitem.metadata.is_dir() {

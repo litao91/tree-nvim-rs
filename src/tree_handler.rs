@@ -8,7 +8,7 @@ use log::*;
 use nvim_rs::{exttypes::Buffer, Handler, Neovim, Value};
 use std::collections::HashMap;
 use std::convert::From;
-use std::sync::Arc;
+use async_std::sync::Arc;
 
 #[derive(Default, Debug)]
 pub struct TreeHandlerData {

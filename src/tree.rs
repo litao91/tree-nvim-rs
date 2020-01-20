@@ -1,6 +1,8 @@
 use crate::column::ColumnType;
 use crate::column::{ColumnCell, FileItem, FileItemPtr};
 use crate::errors::ArgError;
+use async_std::sync::Arc;
+use async_std::sync::Mutex;
 use futures::io::AsyncWrite;
 use git2::{Repository, Status};
 use log::*;
@@ -14,9 +16,10 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::convert::From;
 use std::env;
+use std::fmt;
+use std::fmt::Debug;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use unicode_width::UnicodeWidthStr;
 
 pub fn absolute_path<P>(path: P) -> io::Result<PathBuf>
@@ -320,7 +323,6 @@ impl Config {
 
 const KSTOP: usize = 90;
 
-#[derive(Debug)]
 pub struct Tree {
     pub bufnr: (i8, Vec<u8>), // use bufnr to avoid tedious generic code
     pub icon_ns_id: i64,
@@ -328,11 +330,24 @@ pub struct Tree {
     selected_items: HashSet<usize>,
     fileitems: Vec<FileItemPtr>,
     expand_store: HashMap<String, bool>,
-    git_map: HashMap<String, Status>,
     col_map: HashMap<ColumnType, Vec<ColumnCell>>,
     targets: Vec<usize>,
     cursor_history: HashMap<String, u64>,
+    use_git: bool,
+    git_repo: Option<Mutex<Repository>>,
+    pub git_map: HashMap<String, Status>,
 }
+
+impl Debug for Tree {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Tree {{ bufnr: {:?}, icon_ns_id: {:?}, config: {:?} }}",
+            self.bufnr, self.icon_ns_id, self.config
+        )
+    }
+}
+
 impl Tree {
     pub async fn new<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         bufnr: (i8, Vec<u8>),
@@ -351,11 +366,13 @@ impl Tree {
             config: Default::default(),
             fileitems: Default::default(),
             expand_store: Default::default(),
-            git_map: Default::default(),
             col_map: Default::default(),
             targets: Default::default(),
             cursor_history: Default::default(),
             selected_items: Default::default(),
+            use_git: false,
+            git_repo: None,
+            git_map: Default::default(),
         })
     }
     pub fn is_item_opened(&self, path: &str) -> bool {
@@ -367,30 +384,40 @@ impl Tree {
     pub fn is_item_selected(&self, idx: usize) -> bool {
         self.selected_items.contains(&idx)
     }
-    pub fn update_git_map<P: AsRef<Path>>(&mut self, path: P) {
-        self.git_map.clear();
+    pub fn init_git_repo<P: AsRef<Path>>(&mut self, path: P) {
         match Repository::discover(path) {
-            Ok(repo) => match repo.statuses(None) {
-                Ok(statuses) => {
-                    let work_dir = repo.workdir().unwrap();
-                    for status in statuses.iter() {
-                        if status.status() == Status::IGNORED {
-                            continue;
+            Ok(repo) => self.git_repo = Some(Mutex::new(repo)),
+            Err(e) => {
+                info!("Not a git repo: {:?}", e);
+            }
+        }
+    }
+    pub fn update_git_map(&mut self) {
+        if let Some(ref mutex) = self.git_repo {
+            if let Some(ref repo) = mutex.try_lock() {
+                self.git_map.clear();
+                match repo.statuses(None) {
+                    Ok(statuses) => {
+                        let work_dir = repo.workdir().unwrap();
+                        for status in statuses.iter() {
+                            self.git_map.insert(
+                                work_dir
+                                    .join(status.path().unwrap())
+                                    .to_str()
+                                    .unwrap()
+                                    .to_owned(),
+                                status.status(),
+                            );
                         }
-                        self.git_map.insert(
-                            work_dir
-                                .join(status.path().unwrap())
-                                .to_str()
-                                .unwrap()
-                                .to_owned(),
-                            status.status(),
-                        );
+                        info!("{:?}", self.git_map);
                     }
-                    info!("{:?}", self.git_map);
+                    Err(e) => error!("Fail to get status: {:?}", e),
                 }
-                Err(e) => error!("Fail to get status: {:?}", e),
-            },
-            Err(e) => info!("Not a git repo: {:?}", e),
+            } else {
+                info!("We failed the race!");
+            }
+        } else {
+            info!("Git not enabled");
         }
     }
     pub async fn action<W: AsyncWrite + Send + Sync + Unpin + 'static>(
@@ -494,7 +521,7 @@ impl Tree {
         parent_idx: usize,
         force: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // self.update_git_map(self.fileitems[0].path.clone());
+        self.update_git_map();
         let cur = match self.fileitems.get(parent_idx) {
             Some(c) => c,
             None => return Err(Box::new(ArgError::new("Invalid index"))),
@@ -1013,7 +1040,10 @@ impl Tree {
             return Ok(());
         }
         let root_path = absolute_path(path)?;
-        // self.update_git_map(&root_path);
+        if self.config.columns.contains(&ColumnType::GIT) {
+            self.init_git_repo(&root_path);
+            self.update_git_map();
+        }
         let root_path_str = if let Some(p) = root_path.to_str() {
             p
         } else {

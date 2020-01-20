@@ -31,3 +31,9 @@ Inspired by [tree.nvim](https://github.com/zgpio/tree.nvim) and Defx, in fact th
 - [ ] resize
 - [ ] git status
 - [ ] search
+- [ ] redraw
+- [ ] More git support
+    - [ ] add
+    - [ ] commit
+    - [ ] pull
+    - [ ] push
