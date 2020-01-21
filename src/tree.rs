@@ -443,6 +443,7 @@ impl Tree {
             "toggle_select" => self.action_toggle_select(nvim, args, ctx).await,
             "remove" => self.action_remove(nvim, args, ctx).await,
             "toggle_ignored_files" => self.action_show_ignored(nvim, args, ctx).await,
+            "yank_path" => self.action_yank_path(nvim, args, ctx).await,
             _ => {
                 error!("Unknown action: {}", action);
                 return;
@@ -557,6 +558,35 @@ impl Tree {
         self.buf_set_lines(nvim, start as i64, end as i64, true, ret)
             .await?;
         self.hl_lines(&nvim, start, new_end).await?;
+        Ok(())
+    }
+
+    pub async fn action_yank_path<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        _arg: Value,
+        ctx: Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let paths_str = if self.selected_items.is_empty() {
+            self.fileitems[ctx.cursor as usize - 1]
+                .path
+                .to_str()
+                .unwrap()
+                .to_owned()
+        } else {
+            self.selected_items
+                .iter()
+                .map(|x| self.fileitems[*x].path.to_str().unwrap().to_owned())
+                .collect::<Vec<String>>()
+                .join("\n")
+        };
+        nvim.call_function(
+            "setreg",
+            vec![Value::from("+"), Value::from(paths_str.as_str())],
+        )
+        .await?;
+        nvim.call_function("tree#util#print_message", vec![Value::from(paths_str)])
+            .await?;
         Ok(())
     }
 
