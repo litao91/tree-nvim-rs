@@ -444,6 +444,8 @@ impl Tree {
             "remove" => self.action_remove(nvim, args, ctx).await,
             "toggle_ignored_files" => self.action_show_ignored(nvim, args, ctx).await,
             "yank_path" => self.action_yank_path(nvim, args, ctx).await,
+            "clear_select_all" => self.action_clear_select_all(nvim, args, ctx).await,
+            "toggle_select_all" => self.action_toggle_select_all(nvim, args, ctx).await,
             _ => {
                 error!("Unknown action: {}", action);
                 return;
@@ -549,6 +551,16 @@ impl Tree {
             self.insert_items_and_cells(start, child_items)?;
             new_end = start + child_item_size;
         } else {
+            let cells = self.make_cells(&self.fileitems[start..end], start == 0);
+            for (col, cells) in cells {
+                if !self.col_map.contains_key(&col) {
+                    self.col_map.insert(col.clone(), Vec::new());
+                }
+                self.col_map
+                    .get_mut(&col)
+                    .unwrap()
+                    .splice(start..end, cells);
+            }
             new_end = end;
         }
         // the new end after adding the new file
@@ -675,6 +687,33 @@ impl Tree {
 
         Ok(())
     }
+
+    pub async fn action_clear_select_all<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        _arg: Value,
+        _ctx: Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.selected_items.clear();
+        self.redraw_subtree(nvim, 0, false).await?;
+        Ok(())
+    }
+
+    pub async fn action_toggle_select_all<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        _arg: Value,
+        _ctx: Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        for i in 0..self.fileitems.len() {
+            if !self.selected_items.remove(&i) {
+                self.selected_items.insert(i);
+            }
+        }
+        self.redraw_subtree(nvim, 0, false).await?;
+        Ok(())
+    }
+
 
     pub async fn action_rename<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
@@ -1160,6 +1199,12 @@ impl Tree {
             is_first = false;
         }
         r
+    }
+
+    fn remove_cells(&mut self, start: usize, end: usize) {
+        for (_, val) in self.col_map.iter_mut() {
+            val.splice(start..end, vec![]);
+        }
     }
 
     fn remove_items_and_cells(&mut self, start: usize, end: usize) -> Result<(), ArgError> {
