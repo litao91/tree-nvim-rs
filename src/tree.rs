@@ -446,6 +446,7 @@ impl Tree {
             "yank_path" => self.action_yank_path(nvim, args, ctx).await,
             "clear_select_all" => self.action_clear_select_all(nvim, args, ctx).await,
             "toggle_select_all" => self.action_toggle_select_all(nvim, args, ctx).await,
+            "redraw" => self.action_redraw(nvim, args, ctx).await,
             _ => {
                 error!("Unknown action: {}", action);
                 return;
@@ -570,6 +571,16 @@ impl Tree {
         self.buf_set_lines(nvim, start as i64, end as i64, true, ret)
             .await?;
         self.hl_lines(&nvim, start, new_end).await?;
+        Ok(())
+    }
+
+    pub async fn action_redraw<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        _arg: Value,
+        _ctx: Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.redraw_subtree(nvim, 0, true).await?;
         Ok(())
     }
 
@@ -713,7 +724,6 @@ impl Tree {
         self.redraw_subtree(nvim, 0, false).await?;
         Ok(())
     }
-
 
     pub async fn action_rename<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
