@@ -393,6 +393,9 @@ impl Tree {
         }
     }
     pub fn update_git_map(&mut self) {
+        if self.git_repo.is_none() {
+            self.init_git_repo(&self.fileitems[0].path.clone())
+        }
         if let Some(ref mutex) = self.git_repo {
             if let Some(ref repo) = mutex.try_lock() {
                 self.git_map.clear();
@@ -448,6 +451,7 @@ impl Tree {
             "toggle_select_all" => self.action_toggle_select_all(nvim, args, ctx).await,
             "redraw" => self.action_redraw(nvim, args, ctx).await,
             "resize" => self.action_resize(nvim, args, ctx).await,
+            "update_git_map" => self.action_update_git_map(nvim, args, ctx).await,
             _ => {
                 error!("Unknown action: {}", action);
                 return;
@@ -923,6 +927,19 @@ impl Tree {
         }
         Ok(())
     }
+    /// Open like :drop
+    pub async fn action_update_git_map<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        _args: Value,
+        _ctx: Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if self.config.columns.contains(&ColumnType::GIT) {
+            self.update_git_map();
+            self.redraw_subtree(nvim, 0, false).await?;
+        }
+        Ok(())
+    }
 
     /// Open like :drop
     pub async fn action_drop<W: AsyncWrite + Send + Sync + Unpin + 'static>(
@@ -1121,7 +1138,7 @@ impl Tree {
     }
 
     pub fn update_cells(&mut self, sl: usize, el: usize) {
-        self.update_git_map();
+        // self.update_git_map();
         let cells = self.make_cells(&self.fileitems[sl..el], sl == 0);
         for (col, cells) in cells {
             if !self.col_map.contains_key(&col) {
@@ -1158,9 +1175,11 @@ impl Tree {
             return Ok(());
         }
         let root_path = absolute_path(path)?;
-        if self.config.columns.contains(&ColumnType::GIT) {
+        // if we have loaded git repo previously, we need to update
+        // it. Otherwise we won't do a hard reload in the future
+        if self.git_repo.is_some() {
             self.init_git_repo(&root_path);
-            self.update_git_map();
+            // self.update_git_map();
         }
         let root_path_str = if let Some(p) = root_path.to_str() {
             p

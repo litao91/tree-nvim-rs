@@ -30,5 +30,6 @@ Inspired by [tree.nvim](https://github.com/zgpio/tree.nvim) and Defx, in fact th
 - [x] selection
 - [x] resize
 - [x] git status
+- [x] update git map && load git status on git command
 - [ ] search
 - [x] redraw
