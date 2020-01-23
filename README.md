@@ -28,7 +28,7 @@ Inspired by [tree.nvim](https://github.com/zgpio/tree.nvim) and Defx, in fact th
 - [x] yank_path
 - [ ] open/close recursively
 - [x] selection
-- [ ] resize
+- [x] resize
 - [x] git status
 - [ ] search
 - [x] redraw
