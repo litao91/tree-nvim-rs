@@ -115,7 +115,7 @@ impl Context {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SplitType {
     Vertical,
     Horizontal,
@@ -447,6 +447,7 @@ impl Tree {
             "clear_select_all" => self.action_clear_select_all(nvim, args, ctx).await,
             "toggle_select_all" => self.action_toggle_select_all(nvim, args, ctx).await,
             "redraw" => self.action_redraw(nvim, args, ctx).await,
+            "resize" => self.action_resize(nvim, args, ctx).await,
             _ => {
                 error!("Unknown action: {}", action);
                 return;
@@ -581,6 +582,44 @@ impl Tree {
         _ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.redraw_subtree(nvim, 0, true).await?;
+        Ok(())
+    }
+
+    pub async fn resize_window<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let window = nvim.get_current_win().await?;
+        if self.config.split == SplitType::Vertical && self.config.winwidth > 0 {
+            let cmd = format!("vertical resize {}", self.config.winwidth);
+            window.set_option("winfixwidth", Value::from(true)).await?;
+            nvim.command(&cmd).await?;
+        } else if self.config.split == SplitType::Horizontal && self.config.winheight > 0 {
+            window.set_option("winfixheight", Value::from(true)).await?;
+            let cmd = format!("resize {}", self.config.winheight);
+            nvim.command(&cmd).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn action_resize<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        arg: Value,
+        ctx: Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let args = match arg {
+            Value::Array(v) => v,
+            _ => {
+                Err(ArgError::new("Invalid arg type"))?;
+                return Ok(());
+            }
+        };
+        if args.is_empty() {
+            return Ok(());
+        }
+        self.config.winwidth = args[0].as_u64().unwrap() as u16;
+        self.resize_window(nvim).await?;
         Ok(())
     }
 
