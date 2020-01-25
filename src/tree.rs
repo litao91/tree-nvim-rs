@@ -241,7 +241,9 @@ fn val_to_u16(v: &Value) -> Result<u16, Box<dyn std::error::Error>> {
     } else {
         match v.as_u64() {
             Some(v) => Ok(v as u16),
-            None => Err(Box::new(crate::errors::ArgError::new("Type mismatch"))),
+            None => Err(Box::new(crate::errors::ArgError::new(
+                "Type mismatch: str u64",
+            ))),
         }
     }
 }
@@ -250,7 +252,9 @@ fn val_to_string(v: &Value) -> Result<String, Box<dyn std::error::Error>> {
     if let Some(v_str) = v.as_str() {
         Ok(v_str.to_owned())
     } else {
-        Err(Box::new(crate::errors::ArgError::new("Type mismatch")))
+        Err(Box::new(crate::errors::ArgError::new(
+            "Type mismatch: str expected",
+        )))
     }
 }
 
@@ -260,7 +264,13 @@ fn val_to_bool(v: &Value) -> Result<bool, Box<dyn std::error::Error>> {
     } else {
         match v.as_bool() {
             Some(v) => Ok(v),
-            None => Err(Box::new(crate::errors::ArgError::new("Type mismatch"))),
+            None => match v.as_i64() {
+                Some(vi) => Ok(vi == 1),
+                None => Err(Box::new(crate::errors::ArgError::from_string(format!(
+                    "Type mismatch: bool expected, but {:?} found",
+                    v
+                )))),
+            },
         }
     }
 }
@@ -279,12 +289,39 @@ impl Config {
                 "winheigth" => self.winheight = val_to_u16(v)?,
                 "winrow" => self.winrow = val_to_u16(v)?,
                 "winwidth" => self.winwidth = val_to_u16(v)?,
-                "auto_cd" => self.auto_cd = val_to_bool(v)?,
-                "listed" => self.listed = val_to_bool(v)?,
-                "new" => self.new = val_to_bool(v)?,
-                "profile" => self.profile = val_to_bool(v)?,
-                "show_ignored_files" => self.show_ignored_files = val_to_bool(v)?,
-                "toggle" => self.toggle = val_to_bool(v)?,
+                "auto_cd" => {
+                    self.auto_cd = val_to_bool(v).map_err(|e| {
+                        ArgError::from_string(format!("auto_cd need boolean type: {:?}", e))
+                    })?
+                }
+                "listed" => {
+                    self.listed = val_to_bool(v).map_err(|e| {
+                        ArgError::from_string(format!("Config: auto_cd need boolean type: {:?}", e))
+                    })?
+                }
+                "new" => {
+                    self.new = val_to_bool(v).map_err(|e| {
+                        ArgError::from_string(format!("Config: new need boolean type: {:?}", e))
+                    })?
+                }
+                "profile" => {
+                    self.profile = val_to_bool(v).map_err(|e| {
+                        ArgError::from_string(format!("profile need boolean type: {:?}", e))
+                    })?
+                }
+                "show_ignored_files" => {
+                    self.show_ignored_files = val_to_bool(v).map_err(|e| {
+                        ArgError::from_string(format!(
+                            "show_ignored_files need boolean type: {:?}",
+                            e
+                        ))
+                    })?
+                }
+                "toggle" => {
+                    self.toggle = val_to_bool(v).map_err(|e| {
+                        ArgError::from_string(format!("toggle need boolean type: {:?}", e))
+                    })?
+                }
                 "root_marker" => self.root_marker = val_to_string(v)?,
                 "buffer_name" => self.buffer_name = val_to_string(v)?,
                 "direction" => self.direction = val_to_string(v)?,

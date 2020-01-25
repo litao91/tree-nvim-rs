@@ -91,24 +91,23 @@ function! s:internal_options() abort
         \ 'visual_end': getpos("'>")[1],
         \ }
 endfunction
+
 function! tree#init#_context(user_context) abort
   let buffer_name = get(a:user_context, 'buffer_name', 'default')
-  let context = tree#init#_user_var_options()
-  let custom = tree#custom#_get()
+  let context = s:internal_options()
+  call extend(context, defx#init#_user_options())
+  let custom = defx#custom#_get()
   if has_key(custom.option, '_')
     call extend(context, custom.option['_'])
-    unlet custom.option['_']
   endif
   if has_key(custom.option, buffer_name)
     call extend(context, custom.option[buffer_name])
   endif
   call extend(context, a:user_context)
-  " TODO: support custom#column
-  let context['custom'] = custom
   return context
 endfunction
 
 function! tree#init#action_context() abort
-  let context = s:internal_options()
-  return context
+    let context = s:internal_options()
+    return context
 endfunction

@@ -33,3 +33,5 @@ Inspired by [tree.nvim](https://github.com/zgpio/tree.nvim) and Defx, in fact th
 - [x] update git map && load git status on git command
 - [ ] search
 - [x] redraw
+- [ ] test cases
+- [ ] Custom
