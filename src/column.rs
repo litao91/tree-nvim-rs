@@ -557,7 +557,7 @@ impl From<&str> for ColumnType {
             "filename" => ColumnType::FILENAME,
             "size" => ColumnType::SIZE,
             "time" => ColumnType::TIME,
-            _ => panic!("Error! unknown column type"),
+            _ => panic!(format!("Error! unknown column type: {}", s)),
         }
     }
 }
