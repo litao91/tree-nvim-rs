@@ -35,3 +35,4 @@ Inspired by [tree.nvim](https://github.com/zgpio/tree.nvim) and Defx, in fact th
 - [x] redraw
 - [ ] test cases
 - [x] Custom
+- [ ] size and time column

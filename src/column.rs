@@ -3,6 +3,7 @@ use git2::Status;
 use std::convert::From;
 use std::ffi::OsStr;
 use std::fs::Metadata;
+use log::*;
 
 #[derive(Eq, PartialEq, Clone)]
 pub enum Icon {
@@ -524,12 +525,15 @@ fn get_git_indicator(status: Status) -> (&'static str, GuiColor) {
     match status {
         Status::WT_NEW => ("✭", GuiColor::WHITE),
         Status::WT_MODIFIED => ("✹", GuiColor::YELLOW),
-        Status::WT_TYPECHANGE => ("✚", GuiColor::GREEN),
+        Status::INDEX_MODIFIED => ("✚", GuiColor::GREEN),
         Status::WT_RENAMED => ("➜", GuiColor::YELLOW),
         Status::IGNORED => ("☒", GuiColor::WHITE),
         Status::CONFLICTED => ("═", GuiColor::RED),
         Status::WT_DELETED => ("✖", GuiColor::RED),
-        _ => ("?", GuiColor::WHITE),
+        _ => {
+            info!("Unknown status: {:?}", status);
+            ("?", GuiColor::WHITE)
+        }
     }
 }
 
