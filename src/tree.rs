@@ -1328,10 +1328,6 @@ impl Tree {
                     self.selected_items.insert(i);
                 }
                 // TODO: is it safe here?
-                // NOTE: this should be safe
-                // 1. this is the only place modifying the index
-                // 2. the data is in TreeHandler::data, which is protected by a mutex => impossible
-                //    to be modified concurrently.
                 unsafe {
                     (&mut *(fi as *const FileItem as *mut FileItem)).id = i;
                 }
@@ -1362,10 +1358,6 @@ impl Tree {
                     self.selected_items.insert(i);
                 }
                 // TODO: is it safe here?
-                // NOTE: this should be safe
-                // 1. this is the only place modifying the index
-                // 2. the data is in TreeHandler::data, which is protected by a mutex => impossible
-                //    to be modified concurrently.
                 unsafe {
                     (&mut *(fi as *const FileItem as *mut FileItem)).id = i;
                 }
