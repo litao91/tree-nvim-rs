@@ -1327,7 +1327,9 @@ impl Tree {
                 if self.selected_items.remove(&fi.id) {
                     self.selected_items.insert(i);
                 }
-                // TODO: is it safe here?
+                // This should be safe here, &mut self (guaranteed by rust) is the only mutable borrowing
+                // and fileitem won't live outside self (it's private, and the only place referring
+                // fileitem other than the fileitem list is the "parent" field of other fileitem
                 unsafe {
                     (&mut *(fi as *const FileItem as *mut FileItem)).id = i;
                 }
@@ -1357,7 +1359,8 @@ impl Tree {
                 if self.selected_items.remove(&fi.id) {
                     self.selected_items.insert(i);
                 }
-                // TODO: is it safe here?
+                // This should be safe here, &mut self is the only mutable borrowing
+                // and fileitem won't live outside self
                 unsafe {
                     (&mut *(fi as *const FileItem as *mut FileItem)).id = i;
                 }
