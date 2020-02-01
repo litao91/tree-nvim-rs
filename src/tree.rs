@@ -358,7 +358,7 @@ impl Config {
     }
 }
 
-const KSTOP: usize = 90;
+const KSTOP: usize = 60;
 
 pub struct Tree {
     pub bufnr: (i8, Vec<u8>), // use bufnr to avoid tedious generic code
@@ -370,7 +370,6 @@ pub struct Tree {
     col_map: HashMap<ColumnType, Vec<ColumnCell>>,
     targets: Vec<usize>,
     cursor_history: HashMap<String, u64>,
-    use_git: bool,
     git_repo: Option<Mutex<Repository>>,
     pub git_map: HashMap<String, Status>,
 }
@@ -407,7 +406,6 @@ impl Tree {
             targets: Default::default(),
             cursor_history: Default::default(),
             selected_items: Default::default(),
-            use_git: false,
             git_repo: None,
             git_map: Default::default(),
         })
@@ -880,8 +878,8 @@ impl Tree {
         } else {
             let mut parent = filename.clone();
             parent.pop();
-            std::fs::create_dir_all(parent);
-            std::fs::File::create(filename);
+            std::fs::create_dir_all(parent)?;
+            std::fs::File::create(filename)?;
         }
 
         self.redraw_subtree(nvim, idx_to_redraw, true).await?;

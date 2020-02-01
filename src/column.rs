@@ -1,9 +1,10 @@
 use crate::tree::Tree;
+use chrono::{DateTime, Local};
 use git2::Status;
+use log::*;
 use std::convert::From;
 use std::ffi::OsStr;
 use std::fs::Metadata;
-use log::*;
 
 #[derive(Eq, PartialEq, Clone)]
 pub enum Icon {
@@ -670,7 +671,7 @@ pub struct ColumnCell {
 
 impl ColumnCell {
     pub fn new(tree: &Tree, fileitem: &FileItem, ty: ColumnType, is_root_cell: bool) -> Self {
-        let mut text = String::new();
+        let mut text;
         let mut hl_group = None;
         let path_str = fileitem.path.to_str().unwrap();
         match ty {
@@ -777,8 +778,33 @@ impl ColumnCell {
                     }
                 }
             }
-            ColumnType::SIZE => {}
-            ColumnType::TIME => {}
+            ColumnType::SIZE => {
+                if fileitem.metadata.is_dir() {
+                    text = String::from("       ");
+                } else {
+                    let sz = fileitem.metadata.len();
+                    text = if sz < 1024 {
+                        format!("{} B", sz)
+                    } else if 1024 <= sz && sz < 1024 * 1024 {
+                        format!("{} KB", sz >> 10)
+                    } else if 1024 * 1024 <= sz && sz < 1024 * 1024 * 1024 {
+                        format!("{} MB", sz >> 20)
+                    } else if 1024 * 1024 * 1024 <= sz && sz < 1024u64 * 1024 * 1024 * 1024 {
+                        format!("{} GB", sz >> 30)
+                    } else if 1024u64 * 1024 * 1024 * 1024 <= sz
+                        && sz < 1024u64 * 1024 * 1024 * 1024 * 1024
+                    {
+                        format!("{} TB", sz >> 40)
+                    } else {
+                        unreachable!();
+                    }
+                }
+            }
+            ColumnType::TIME => {
+                hl_group = Some(GuiColor::BLUE.hl_group_name().to_owned());
+                let modified_dt: DateTime<Local> = fileitem.metadata.modified().unwrap().into();
+                text = format!("{}", modified_dt.format("%Y-%m-%d"));
+            }
         };
         Self {
             col_start: 0,
