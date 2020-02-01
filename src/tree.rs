@@ -645,7 +645,7 @@ impl Tree {
         &mut self,
         nvim: &Neovim<W>,
         arg: Value,
-        ctx: Context,
+        _ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let args = match arg {
             Value::Array(v) => v,
@@ -1230,7 +1230,6 @@ impl Tree {
         };
         self.expand_store.insert(root_path_str.to_owned(), true);
 
-        // TODO: update git map
         self.targets.clear();
         self.col_map.clear();
         self.fileitems.clear();

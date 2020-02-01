@@ -1,10 +1,7 @@
-use crate::tree::Tree;
 use async_std;
-use async_trait::async_trait;
 use backtrace::Backtrace;
-use fork::{daemon, Fork};
 use futures::io::AsyncWrite;
-use futures::io::{AsyncReadExt, WriteHalf};
+use futures::io::WriteHalf;
 use log::*;
 
 #[cfg(unix)]
