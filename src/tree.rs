@@ -1280,8 +1280,6 @@ impl Tree {
                 cell.byte_start = byte_start;
                 cell.byte_end = byte_start + cell.text.len();
                 cell.col_start = start;
-
-                // TODO: count grid for file name
                 cell.col_end = start + UnicodeWidthStr::width(cell.text.as_str());
                 // NOTE: alignment
                 if *col == ColumnType::FILENAME {
@@ -1303,11 +1301,13 @@ impl Tree {
         r
     }
 
+    /*
     fn remove_cells(&mut self, start: usize, end: usize) {
         for (_, val) in self.col_map.iter_mut() {
             val.splice(start..end, vec![]);
         }
     }
+    */
 
     fn remove_items_and_cells(&mut self, start: usize, end: usize) -> Result<(), ArgError> {
         // remove the items in between

@@ -550,6 +550,7 @@ pub enum ColumnType {
     FILENAME,
     SIZE,
     TIME,
+    SPACE,
 }
 
 impl From<&str> for ColumnType {
@@ -562,6 +563,7 @@ impl From<&str> for ColumnType {
             "filename" => ColumnType::FILENAME,
             "size" => ColumnType::SIZE,
             "time" => ColumnType::TIME,
+            "space" => ColumnType::SPACE,
             _ => panic!(format!("Error! unknown column type: {}", s)),
         }
     }
@@ -763,7 +765,6 @@ impl ColumnCell {
                     hl_group = Some(extension_icon.hl_group_name().to_owned());
                     text = extension_icon.as_glyph_and_color().0.to_owned();
                 }
-                text.push(' ');
             }
             ColumnType::FILENAME => {
                 hl_group = Some(GuiColor::YELLOW.hl_group_name().to_owned());
@@ -784,17 +785,17 @@ impl ColumnCell {
                 } else {
                     let sz = fileitem.metadata.len();
                     text = if sz < 1024 {
-                        format!("{} B", sz)
+                        format!("{: >4} B ", sz)
                     } else if 1024 <= sz && sz < 1024 * 1024 {
-                        format!("{} KB", sz >> 10)
+                        format!("{: >4} KB", sz >> 10)
                     } else if 1024 * 1024 <= sz && sz < 1024 * 1024 * 1024 {
-                        format!("{} MB", sz >> 20)
+                        format!("{: >4} MB", sz >> 20)
                     } else if 1024 * 1024 * 1024 <= sz && sz < 1024u64 * 1024 * 1024 * 1024 {
-                        format!("{} GB", sz >> 30)
+                        format!("{: >4} GB", sz >> 30)
                     } else if 1024u64 * 1024 * 1024 * 1024 <= sz
                         && sz < 1024u64 * 1024 * 1024 * 1024 * 1024
                     {
-                        format!("{} TB", sz >> 40)
+                        format!("{: >4} TB", sz >> 40)
                     } else {
                         unreachable!();
                     }
@@ -804,6 +805,9 @@ impl ColumnCell {
                 hl_group = Some(GuiColor::BLUE.hl_group_name().to_owned());
                 let modified_dt: DateTime<Local> = fileitem.metadata.modified().unwrap().into();
                 text = format!("{}", modified_dt.format("%Y-%m-%d"));
+            }
+            ColumnType::SPACE => {
+                text = String::from(" ");
             }
         };
         Self {

@@ -36,4 +36,5 @@ Inspired by [tree.nvim](https://github.com/zgpio/tree.nvim) and Defx, in fact th
 - [ ] test cases
 - [x] Custom
 - [x] size and time column
-- [ ] better file name alignment
+- [x] better file name alignment
+- [x] Space cell
