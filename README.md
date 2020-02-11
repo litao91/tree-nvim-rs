@@ -38,3 +38,4 @@ Inspired by [tree.nvim](https://github.com/zgpio/tree.nvim) and Defx, in fact th
 - [x] size and time column
 - [x] better file name alignment
 - [x] Space cell
+- [ ] More file types recognization and icon customization
