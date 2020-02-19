@@ -474,6 +474,7 @@ impl Tree {
             "open_tree" => self.action_open_tree(nvim, args, ctx).await,
             "close_tree" => self.action_close_tree(nvim, args, ctx).await,
             "open_or_close_tree" => self.action_open_or_close_tree(nvim, args, ctx).await,
+            "open_directory" => self.action_open_directory(nvim, args, ctx).await,
             "cd" => self.action_cd(nvim, args, ctx).await,
             "call" => self.action_call(nvim, args, ctx).await,
             "new_file" => self.action_new_file(nvim, args, ctx).await,
@@ -1158,6 +1159,29 @@ impl Tree {
             self.close_tree(nvim, idx).await?;
         } else {
             self.open_tree(nvim, idx).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn action_open_directory<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        _args: Value,
+        ctx: Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let idx = ctx.cursor as usize - 1;
+        let target = match self.fileitems.get(idx) {
+            Some(fi) => fi,
+            None => {
+                return Err(Box::new(ArgError::from_string(format!(
+                    "item not found: {}",
+                    idx
+                ))));
+            }
+        };
+        if target.metadata.is_dir() && idx != 0 {
+            let target_path = target.path.to_str().unwrap().to_owned();
+            self.change_root(&target_path, nvim).await?;
         }
         Ok(())
     }
