@@ -67,6 +67,8 @@ fn panic_hook() {
     }));
 }
 
+/// Initialize the neovim channel
+/// It sets up the channel_id and and highlite groups
 async fn init_channel<T>(nvim: &Neovim<T>)
 where
     T: Sync + Send + Unpin + AsyncWrite,
@@ -98,6 +100,7 @@ async fn run(args: Vec<String>) {
             server = args.get(i + 1);
         }
     }
+    // create the neovim session with TreeHandler
     let (nvim, io_handler) = create::new_unix_socket(
         server.unwrap(),
         TreeHandler::<WriteHalf<UnixStream>>::default(),

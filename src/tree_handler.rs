@@ -14,7 +14,7 @@ use std::convert::From;
 #[derive(Default, Debug)]
 pub struct TreeHandlerData {
     // cfg_map: HashMap<String, Value>,
-    trees: HashMap<(i8, Vec<u8>), Tree>,
+    bufnr_to_tree: HashMap<(i8, Vec<u8>), Tree>,
     treebufs: Vec<(i8, Vec<u8>)>, // recently used order
     // buffer: Option<Buffer<<TreeHandler as Handler>::Writer>>,
     buf_count: u32,
@@ -23,6 +23,7 @@ pub struct TreeHandlerData {
 
 type TreeHandlerDataPtr = Arc<RwLock<TreeHandlerData>>;
 
+/// Handling requests and notifiications from neovim
 pub struct TreeHandler<W: AsyncWrite + Send + Sync + Unpin + 'static> {
     _phantom: Option<W>, // ugly, but otherwise the compiler will complain, need to workout a more elegant way
     data: TreeHandlerDataPtr,
@@ -31,7 +32,7 @@ pub struct TreeHandler<W: AsyncWrite + Send + Sync + Unpin + 'static> {
 impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Clone for TreeHandler<W> {
     fn clone(&self) -> Self {
         Self {
-            data: self.data.clone(),
+            data: self.data.clone(), // the shared state
             _phantom: Default::default(),
         }
     }
@@ -68,12 +69,13 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         {
             tree.config.update(&cfg_map)?;
         }
+
         let start = std::time::Instant::now();
         tree.change_root(path, &nvim).await?;
         info!("change root took: {} secs", start.elapsed().as_secs_f64());
 
         let tree_cfg = tree.config.get_cfg_map();
-        data.trees.insert(bufnr.clone(), tree);
+        data.bufnr_to_tree.insert(bufnr.clone(), tree);
         data.treebufs.push(bufnr.clone());
         data.prev_bufnr = Some(bufnr.clone());
         // let start = std::time::Instant::now();
@@ -100,6 +102,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         Ok(buf)
     }
 
+    /// starts the tree, either create a new one or using the existing one
     async fn start_tree(
         data: &mut TreeHandlerData,
         nvim: &Neovim<<Self as Handler>::Writer>,
@@ -112,13 +115,16 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             Some(Value::Boolean(v)) => Some(v),
             _ => None,
         };
-        is_new = if data.trees.len() < 1 || new_val.is_some() && *new_val.unwrap() {
+        // It's a new tree if there is no existing tree or there is a new explicitly in the cmd
+        is_new = if data.bufnr_to_tree.len() < 1 || new_val.is_some() && *new_val.unwrap() {
             true
         } else {
             false
         };
+
         if is_new {
             info!("creating new tree");
+            // new namespace and new buffer for the new tree
             let ns_id = Self::create_namespace(nvim).await?;
             let buf = Self::create_buf(data, nvim).await?;
             // let start = std::time::Instant::now();
@@ -134,7 +140,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
                     None => return Err(Box::new(ArgError::new("prev_bufnr not defined"))),
                 }
                 .clone();
-                let tree = match data.trees.get_mut(&prev_bufnr) {
+                let tree = match data.bufnr_to_tree.get_mut(&prev_bufnr) {
                     Some(t) => t,
                     None => return Err(Box::new(ArgError::new("unknown tree"))),
                 };
