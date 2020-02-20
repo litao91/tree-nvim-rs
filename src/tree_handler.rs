@@ -253,7 +253,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                 };
                 info!("bufnr: {:?}, cursor {}", bufnr, cursor);
                 let d = self.data.read().await;
-                if let Some(tree) = d.trees.get(&bufnr) {
+                if let Some(tree) = d.bufnr_to_tree.get(&bufnr) {
                     Ok(Value::from(tree.get_context_value(cursor)))
                 } else {
                     Err(Value::from("Can't find view"))
@@ -327,7 +327,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                 );
                 d.prev_bufnr = ctx.prev_bufnr.clone();
                 if let Some(bufnr) = ctx.prev_bufnr.clone() {
-                    if let Some(tree) = d.trees.get_mut(&bufnr) {
+                    if let Some(tree) = d.bufnr_to_tree.get_mut(&bufnr) {
                         let start = std::time::Instant::now();
                         tree.action(&neovim, &action, act_args, ctx).await;
                         info!(
