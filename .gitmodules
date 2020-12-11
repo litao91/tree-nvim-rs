@@ -1,3 +1,0 @@
-[submodule "nvim-rs"]
-	path = nvim-rs
-	url = https://github.com/KillTheMule/nvim-rs.git
