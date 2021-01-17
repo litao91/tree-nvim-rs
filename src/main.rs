@@ -107,7 +107,9 @@ async fn run(args: Vec<String>) {
     )
     .await
     .unwrap();
+    // set tree#_channel_id
     init_channel(&nvim).await;
+
     match io_handler.await {
         Err(err) => {
             if !err.is_reader_error() {

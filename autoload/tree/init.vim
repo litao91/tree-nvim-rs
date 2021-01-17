@@ -19,6 +19,7 @@ function! tree#init#_initialize() abort
 
   let g:tree#_histories = []
 endfunction
+
 function! tree#init#_channel() abort
   if has('nvim') && !has('nvim-0.4.2')
     call tree#util#print_error('tree requires nvim 0.4.2+.')
@@ -45,8 +46,8 @@ function! tree#init#_channel() abort
   return v:true
   " call tree#util#print_error(v:exception)
   " call tree#util#print_error(v:throwpoint)
-
 endfunction
+
 function! tree#init#_check_channel() abort
   return exists('g:tree#_channel_id')
 endfunction
@@ -57,6 +58,7 @@ function! tree#init#_user_var_options() abort
         \ 'winrow': &lines / 3,
         \ }
 endfunction
+
 function! tree#init#_user_options() abort
   return extend({
         \ 'auto_cd': v:false,

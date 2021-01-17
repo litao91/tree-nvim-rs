@@ -8,7 +8,8 @@ function! tree#start(paths, user_context) abort
   let paths = a:paths
   let paths = map(paths, "fnamemodify(v:val, ':p')")
   if len(paths) == 0
-    let paths = [expand('%:p:h')]
+    "let paths = [expand('%:p:h')]
+    let paths = [getcwd()]
   endif
   call tree#util#rpcrequest('_tree_start', [paths, context], v:false)
 endfunction

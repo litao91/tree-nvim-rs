@@ -15,7 +15,7 @@ use std::convert::From;
 pub struct TreeHandlerData {
     // cfg_map: HashMap<String, Value>,
     bufnr_to_tree: HashMap<(i8, Vec<u8>), Tree>,
-    treebufs: Vec<(i8, Vec<u8>)>, // recently used order
+    tree_bufs: Vec<(i8, Vec<u8>)>, // recently used order
     // buffer: Option<Buffer<<TreeHandler as Handler>::Writer>>,
     buf_count: u32,
     prev_bufnr: Option<(i8, Vec<u8>)>,
@@ -25,7 +25,7 @@ type TreeHandlerDataPtr = Arc<RwLock<TreeHandlerData>>;
 
 /// Handling requests and notifiications from neovim
 pub struct TreeHandler<W: AsyncWrite + Send + Sync + Unpin + 'static> {
-    _phantom: Option<W>, // ugly, but otherwise the compiler will complain, need to workout a more elegant way
+    _phantom: std::marker::PhantomData<W>, // ugly, but otherwise the compiler will complain, need to workout a more elegant way
     data: TreeHandlerDataPtr,
 }
 
@@ -76,7 +76,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
 
         let tree_cfg = tree.config.get_cfg_map();
         data.bufnr_to_tree.insert(bufnr.clone(), tree);
-        data.treebufs.push(bufnr.clone());
+        data.tree_bufs.push(bufnr.clone());
         data.prev_bufnr = Some(bufnr.clone());
         // let start = std::time::Instant::now();
         let args = vec![Value::Ext(bufnr.0, bufnr.1), tree_cfg];
@@ -146,10 +146,10 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
                 };
                 tree.config.update(&cfg_map)?;
                 tree_cfg = tree.config.get_cfg_map();
-                data.treebufs.retain(|v| v != &prev_bufnr);
-                data.treebufs.push(prev_bufnr);
+                data.tree_bufs.retain(|v| v != &prev_bufnr);
+                data.tree_bufs.push(prev_bufnr);
                 bufnr_vals = Value::Array(
-                    data.treebufs
+                    data.tree_bufs
                         .iter()
                         .rev()
                         .cloned()
