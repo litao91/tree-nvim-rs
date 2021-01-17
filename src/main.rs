@@ -68,7 +68,7 @@ fn panic_hook() {
 }
 
 /// Initialize the neovim channel
-/// It sets up the channel_id and and highlite groups
+/// It sets up the channel_id and and highlight groups
 async fn init_channel<T>(nvim: &Neovim<T>)
 where
     T: Sync + Send + Unpin + AsyncWrite,
