@@ -74,7 +74,8 @@ where
     T: Sync + Send + Unpin + AsyncWrite,
 {
     let chan = nvim.get_api_info().await.unwrap()[0].as_i64().unwrap();
-    nvim.set_var("tree#_channel_id", Value::from(chan))
+    debug!("setting chan to {}", chan);
+    nvim.execute_lua("require('tree').channel_id = ...", vec![Value::from(chan)])
         .await
         .unwrap();
     info!("Set chan to {} done!", chan);
@@ -94,15 +95,10 @@ where
 
 async fn run(args: Vec<String>) {
     debug!("args: {:?}", args);
-    let mut server = None;
-    for i in 0..args.len() {
-        if args[i] == "--server" {
-            server = args.get(i + 1);
-        }
-    }
+    let server = args[1].clone();
     // create the neovim session with TreeHandler
     let (nvim, io_handler) = create::new_unix_socket(
-        server.unwrap(),
+        server,
         TreeHandler::<WriteHalf<UnixStream>>::default(),
     )
     .await
@@ -141,17 +137,7 @@ async fn main() {
     let _ = init_logging();
     panic_hook();
     let args: Vec<String> = env::args().collect();
-    let mut nofork = false;
-    for arg in &args {
-        if arg == "--nofork" {
-            nofork = true;
-        }
-    }
-    if nofork {
-        debug!("No fork");
-        run(args).await;
-        debug!("Done!");
-    } else {
-        unimplemented!();
-    }
+    debug!("No fork");
+    run(args).await;
+    debug!("Done!");
 }
