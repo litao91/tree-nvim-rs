@@ -35,7 +35,7 @@ pub struct TreeHandlerData {
 
 type TreeHandlerDataPtr = Arc<RwLock<TreeHandlerData>>;
 
-/// Handling requests and notifiications from neovim
+/// Handling requests and notifications from neovim
 pub struct TreeHandler<W: AsyncWrite + Send + Sync + Unpin + 'static> {
     _phantom: std::marker::PhantomData<W>, // ugly, but otherwise the compiler will complain, need to workout a more elegant way
     data: TreeHandlerDataPtr,

@@ -44,7 +44,6 @@ pub struct Context {
     pub prev_bufnr: Option<Value>,
 }
 
-
 impl Context {
     pub fn update(&mut self, key: &str, val: Value) {
         match key {
@@ -386,8 +385,8 @@ impl Tree {
     ) -> Result<Self, Box<dyn std::error::Error>> {
         buf.set_option("ft", Value::from("tree")).await?;
         buf.set_option("modifiable", Value::from(false)).await?;
-        nvim.command("lua require('tree')").await?;
-        nvim.execute_lua("buf_attach(...)", vec![buf.get_value().clone()])
+        nvim.command("lua tree = require('tree')").await?;
+        nvim.execute_lua("tree.buf_attach(...)", vec![buf.get_value().clone()])
             .await?;
         Ok(Self {
             bufnr,
@@ -1399,10 +1398,7 @@ impl Tree {
         strict: bool,
         replacement: Vec<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let buf = Buffer::new(
-            self.bufnr.clone(),
-            nvim.clone(),
-        );
+        let buf = Buffer::new(self.bufnr.clone(), nvim.clone());
         buf.set_option("modifiable", Value::from(true)).await?;
         buf.set_lines(start, end, strict, replacement).await?;
         buf.set_option("modifiable", Value::from(false)).await?;
@@ -1572,10 +1568,7 @@ impl Tree {
             for col in &self.config.columns {
                 let cell = &self.col_map.get(col).unwrap()[i];
                 if let Some(hl_group) = cell.hl_group.clone() {
-                    let buf = Buffer::new(
-                        self.bufnr.clone(),
-                        nvim.clone(),
-                    );
+                    let buf = Buffer::new(self.bufnr.clone(), nvim.clone());
                     let icon_ns_id = self.icon_ns_id;
                     let start = cell.byte_start as i64;
                     let end = (cell.byte_start + cell.text.len()) as i64;

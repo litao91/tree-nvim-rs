@@ -36,7 +36,7 @@ local function default_etc_options()
   return {
     winheight=30,
     winwidth=50,
-    split='no', -- {"vertical", "horizontal", "no", "tab", "floating"}
+    split='vertical', -- {"vertical", "horizontal", "no", "tab", "floating"}
     winrelative='editor',
     buffer_name='default',
     direction='',
@@ -46,6 +46,7 @@ local function default_etc_options()
     winrow=math.modf(vim.o.lines/3)
   }
 end
+
 --- Resume tree window.
 -- If the window corresponding to bufnrs is available, goto it;
 -- otherwise, create a new window.
@@ -96,6 +97,7 @@ function M.resume(bufnrs, cfg)
   if etc.split == 'tab' then
     cmd 'tabnew'
   end
+  print('split: ', etc.split)
   if etc.split == 'vertical' then
     vertical = 'vertical'
     resize_cmd = string.format('vertical resize %d', etc.winwidth)
@@ -125,7 +127,9 @@ function M.resume(bufnrs, cfg)
       cmd(str)
     end
 
-    cmd(resize_cmd)
+    if resize_cmd ~= nil then
+      cmd(resize_cmd)
+    end
   end
 
   cmd "se nonu"
