@@ -41,21 +41,14 @@ pub struct Context {
     pub prev_winid: u64,
     pub visual_start: u64,
     pub visual_end: u64,
-    pub prev_bufnr: Option<(i8, Vec<u8>)>,
+    pub prev_bufnr: Option<Value>,
 }
+
 
 impl Context {
     pub fn update(&mut self, key: &str, val: Value) {
         match key {
-            "prev_bufnr" => match val {
-                Value::Integer(v) => {
-                    self.prev_bufnr = Some((0, vec![v.as_u64().unwrap() as u8]));
-                }
-                Value::Ext(v1, v2) => self.prev_bufnr = Some((v1, v2)),
-                _ => {
-                    error!("Unknown value: {}", val);
-                }
-            },
+            "prev_bufnr" => self.prev_bufnr = Some(val),
             "cursor" => match val {
                 Value::Integer(v) => {
                     self.cursor = if let Some(v) = v.as_u64() {
@@ -361,7 +354,7 @@ impl Config {
 const KSTOP: usize = 60;
 
 pub struct Tree {
-    pub bufnr: (i8, Vec<u8>), // use bufnr to avoid tedious generic code
+    pub bufnr: Value, // use bufnr to avoid tedious generic code
     pub icon_ns_id: i64,
     pub config: Config,
     selected_items: HashSet<usize>,
@@ -386,7 +379,7 @@ impl Debug for Tree {
 
 impl Tree {
     pub async fn new<W: AsyncWrite + Send + Sync + Unpin + 'static>(
-        bufnr: (i8, Vec<u8>),
+        bufnr: Value,
         buf: &Buffer<W>,
         nvim: &Neovim<W>,
         icon_ns_id: i64,
@@ -1407,7 +1400,7 @@ impl Tree {
         replacement: Vec<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let buf = Buffer::new(
-            Value::Ext(self.bufnr.0.clone(), self.bufnr.1.clone()),
+            self.bufnr.clone(),
             nvim.clone(),
         );
         buf.set_option("modifiable", Value::from(true)).await?;
@@ -1580,7 +1573,7 @@ impl Tree {
                 let cell = &self.col_map.get(col).unwrap()[i];
                 if let Some(hl_group) = cell.hl_group.clone() {
                     let buf = Buffer::new(
-                        Value::Ext(self.bufnr.0.clone(), self.bufnr.1.clone()),
+                        self.bufnr.clone(),
                         nvim.clone(),
                     );
                     let icon_ns_id = self.icon_ns_id;

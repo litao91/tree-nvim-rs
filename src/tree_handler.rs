@@ -11,14 +11,26 @@ use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::convert::From;
 
+fn bufnr_val_to_tuple(val: &Value) -> Option<(i8, Vec<u8>)> {
+    match val {
+        Value::Integer(v) => Some((0, vec![v.as_u64().unwrap() as u8])),
+        Value::Ext(v1, v2) => Some((*v1, v2.clone())),
+        _ => None,
+    }
+}
+
+fn tuple_to_bufnr_val(v: &(i8, Vec<u8>)) -> Value {
+    Value::Ext(v.0.clone(), v.1.clone())
+}
+
 #[derive(Default, Debug)]
 pub struct TreeHandlerData {
     // cfg_map: HashMap<String, Value>,
     bufnr_to_tree: HashMap<(i8, Vec<u8>), Tree>,
-    tree_bufs: Vec<(i8, Vec<u8>)>, // recently used order
+    tree_bufs: Vec<Value>, // recently used order
     // buffer: Option<Buffer<<TreeHandler as Handler>::Writer>>,
     buf_count: u32,
-    prev_bufnr: Option<(i8, Vec<u8>)>,
+    prev_bufnr: Option<Value>,
 }
 
 type TreeHandlerDataPtr = Arc<RwLock<TreeHandlerData>>;
@@ -58,13 +70,13 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
     async fn create_tree(
         data: &mut TreeHandlerData,
         nvim: &Neovim<<Self as Handler>::Writer>,
-        buf: &Buffer<<Self as Handler>::Writer>,
-        ns_id: i64,
+        bufnr: Value,
         path: &str,
         cfg_map: HashMap<String, Value>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let bufnr = buf.get_value().as_ext().unwrap();
-        let bufnr = (bufnr.0, Vec::from(bufnr.1));
+        let buf = Buffer::new(bufnr.clone(), nvim.clone());
+        // new namespace and new buffer for the new tree
+        let ns_id = Self::create_namespace(nvim).await?;
         let mut tree = Tree::new(bufnr.clone(), &buf, &nvim, ns_id).await?;
         {
             tree.config.update(&cfg_map)?;
@@ -75,31 +87,18 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         info!("change root took: {} secs", start.elapsed().as_secs_f64());
 
         let tree_cfg = tree.config.get_cfg_map();
-        data.bufnr_to_tree.insert(bufnr.clone(), tree);
+        data.bufnr_to_tree
+            .insert(bufnr_val_to_tuple(&bufnr).unwrap(), tree);
         data.tree_bufs.push(bufnr.clone());
         data.prev_bufnr = Some(bufnr.clone());
         // let start = std::time::Instant::now();
-        let args = vec![Value::Ext(bufnr.0, bufnr.1), tree_cfg];
+        let args = vec![bufnr, tree_cfg];
         // let nvim = nvim.clone();
         // async_std::task::spawn(async move {
-        nvim.execute_lua("resume(...)", args).await.unwrap();
+        nvim.execute_lua("tree.resume(...)", args).await.unwrap();
         // });
         // info!("resume took: {} secs", start.elapsed().as_secs_f64());
         Ok(())
-    }
-
-    async fn create_buf(
-        data: &mut TreeHandlerData,
-        nvim: &Neovim<<Self as Handler>::Writer>,
-    ) -> Result<Buffer<<Self as Handler>::Writer>, Box<dyn std::error::Error>> {
-        let buf = nvim.create_buf(false, true).await.unwrap();
-        info!("new buf created: {:?}", buf.get_value());
-        let buf_num;
-        buf_num = data.buf_count;
-        data.buf_count += 1;
-        let buf_name = format!("Tree-{}", buf_num);
-        buf.set_name(&buf_name).await?;
-        Ok(buf)
     }
 
     /// starts the tree, either create a new one or using the existing one
@@ -109,26 +108,12 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         path: String,
         cfg_map: HashMap<String, Value>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        info!("start_tree");
-        let is_new;
-        let new_val = match cfg_map.get("new") {
-            Some(Value::Boolean(v)) => Some(v),
-            _ => None,
-        };
-        // It's a new tree if there is no existing tree or there is a new explicitly in the cmd
-        is_new = if data.bufnr_to_tree.len() < 1 || new_val.is_some() && *new_val.unwrap() {
-            true
-        } else {
-            false
-        };
+        let bufnr = cfg_map.get("bufnr");
 
-        if is_new {
-            info!("creating new tree");
-            // new namespace and new buffer for the new tree
-            let ns_id = Self::create_namespace(nvim).await?;
-            let buf = Self::create_buf(data, nvim).await?;
+        if let Some(bufnr) = bufnr {
+            info!("creating new tree at {}", bufnr);
             // let start = std::time::Instant::now();
-            Self::create_tree(data, nvim, &buf, ns_id, &path, cfg_map).await?;
+            Self::create_tree(data, nvim, bufnr.clone(), &path, cfg_map).await?;
         // info!("Create tree took {} secs", start.elapsed().as_secs_f64());
         } else {
             let bufnr_vals;
@@ -140,7 +125,10 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
                     None => return Err(Box::new(ArgError::new("prev_bufnr not defined"))),
                 }
                 .clone();
-                let tree = match data.bufnr_to_tree.get_mut(&prev_bufnr) {
+                let tree = match data
+                    .bufnr_to_tree
+                    .get_mut(&bufnr_val_to_tuple(&prev_bufnr).unwrap())
+                {
                     Some(t) => t,
                     None => return Err(Box::new(ArgError::new("unknown tree"))),
                 };
@@ -148,14 +136,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
                 tree_cfg = tree.config.get_cfg_map();
                 data.tree_bufs.retain(|v| v != &prev_bufnr);
                 data.tree_bufs.push(prev_bufnr);
-                bufnr_vals = Value::Array(
-                    data.tree_bufs
-                        .iter()
-                        .rev()
-                        .cloned()
-                        .map(|v| Value::Ext(v.0, v.1))
-                        .collect(),
-                );
+                bufnr_vals = Value::Array(data.tree_bufs.iter().rev().cloned().collect());
             }
             nvim.command("lua require('tree')").await?;
             nvim.execute_lua("resume(...)", vec![bufnr_vals, tree_cfg])
@@ -206,6 +187,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                     Value::String(s) => s.as_str().unwrap().to_owned(),
                     _ => return Err(Value::from("Error: path should be string")),
                 };
+                info!("path: {}, cfg_map: {:?}", path, cfg_map);
                 /*
                 tokio::spawn(async move {
                     if let Err(e) = Self::start_tree(data, nvim, path, cfg_map).await {
@@ -327,7 +309,10 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                 );
                 d.prev_bufnr = ctx.prev_bufnr.clone();
                 if let Some(bufnr) = ctx.prev_bufnr.clone() {
-                    if let Some(tree) = d.bufnr_to_tree.get_mut(&bufnr) {
+                    if let Some(tree) = d
+                        .bufnr_to_tree
+                        .get_mut(&bufnr_val_to_tuple(&bufnr).unwrap())
+                    {
                         let start = std::time::Instant::now();
                         tree.action(&neovim, &action, act_args, ctx).await;
                         info!(

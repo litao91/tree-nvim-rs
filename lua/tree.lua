@@ -681,20 +681,20 @@ end
 -- Transfer core options when _tree_start
 local function init_context(user_context)
   local ctx = {}
-  local custom = vim.deepcopy(custom.get())
+  local local_custom = vim.deepcopy(custom.get())
   -- NOTE: Avoid empty custom.column being converted to vector
-  if vim.tbl_isempty(custom.column) then
-    custom.column = nil
+  if vim.tbl_isempty(local_custom.column) then
+    local_custom.column = nil
   end
-  if custom.option._ then
-    ctx = vim.tbl_extend('force', ctx, custom.option._)
-    custom.option._ = nil
+  if local_custom.option._ then
+    ctx = vim.tbl_extend('force', ctx, local_custom.option._)
+    local_custom.option._ = nil
   end
-  if custom.option.buffer_name then
-    ctx = vim.tbl_extend('force', ctx, custom.option.buffer_name)
+  if local_custom.option.buffer_name then
+    ctx = vim.tbl_extend('force', ctx, local_custom.option.buffer_name)
   end
   ctx = vim.tbl_extend('force', ctx, user_context)
-  ctx.custom = custom
+  ctx.custom = local_custom
   return ctx
 end
 
@@ -710,21 +710,21 @@ end
 M.alive_buf_cnt = 0
 M.etc_options = {}
 local count = 0
-function M.start(paths, user_ctx)
+function M.start(_paths, user_ctx)
   initialize()
   local ctx = init_context(user_ctx)
-  local paths = fn.map(paths, "fnamemodify(v:val, ':p')")
+  local paths = fn.map(_paths, "fnamemodify(v:val, ':p')")
   if #paths == 0 then
-    paths = {fn.expand('%:p:h')}
+    paths = {fn.getcwd()}
   end
   if M.alive_buf_cnt < 1 or user_ctx.new then
     local buf = a.nvim_create_buf(false, true)
     local bufname = "Tree-" .. tostring(count)
-    a.nvim_buf_set_name(buf, bufname);
+    a.nvim_buf_set_name(buf, bufname)
     count = count + 1
     M.alive_buf_cnt = M.alive_buf_cnt + 1
     local etc = default_etc_options()
-    for k, v in pairs(etc) do
+    for k, _ in pairs(etc) do
       if ctx[k] then
         etc[k] = ctx[k]
       end
