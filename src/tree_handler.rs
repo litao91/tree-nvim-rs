@@ -77,20 +77,28 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         let buf = Buffer::new(bufnr.clone(), nvim.clone());
         // new namespace and new buffer for the new tree
         let ns_id = Self::create_namespace(nvim).await?;
+
         let mut tree = Tree::new(bufnr.clone(), &buf, &nvim, ns_id).await?;
         {
             tree.config.update(&cfg_map)?;
         }
+
+        data.prev_bufnr = Some(bufnr.clone());
 
         let start = std::time::Instant::now();
         tree.change_root(path, &nvim).await?;
         info!("change root took: {} secs", start.elapsed().as_secs_f64());
 
         let tree_cfg = tree.config.get_cfg_map();
+
+        buf.set_option("buflisted", Value::from(tree.config.listed))
+            .await?;
+
         data.bufnr_to_tree
             .insert(bufnr_val_to_tuple(&bufnr).unwrap(), tree);
         data.tree_bufs.push(bufnr.clone());
         data.prev_bufnr = Some(bufnr.clone());
+
         // let start = std::time::Instant::now();
         let args = vec![bufnr, tree_cfg];
         // let nvim = nvim.clone();
