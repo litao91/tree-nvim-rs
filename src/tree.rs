@@ -679,7 +679,7 @@ impl Tree {
             vec![Value::from("+"), Value::from(paths_str.as_str())],
         )
         .await?;
-        nvim.call_function("tree#util#print_message", vec![Value::from(paths_str)])
+        nvim.execute_lua("tree.print_message(...)", vec![Value::from(paths_str)])
             .await?;
         Ok(())
     }
@@ -802,6 +802,7 @@ impl Tree {
         _arg: Value,
         ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        info!("{:?}", _arg);
         let idx = ctx.cursor as usize - 1;
         let cur = &self.fileitems[idx];
         let old_path = cur.path.to_str().unwrap();
@@ -820,8 +821,7 @@ impl Tree {
 
         if new_path.exists() {
             let message = Value::from(format!("{} already exists", new_path.to_str().unwrap()));
-            nvim.call_function("tree#util#print_error", vec![message])
-                .await?;
+            nvim.execute_lua("tree.print_message(...)", vec![message]).await?;
             return Err(Box::new(ArgError::new("File exists!")));
         }
         std::fs::rename(&cur.path, new_path)?;
@@ -862,7 +862,7 @@ impl Tree {
         info!("New file name: {:?}", filename);
         let message = Value::from(format!("{} already exists", filename.to_str().unwrap()));
         if filename.exists() {
-            nvim.call_function("tree#util#print_error", vec![message])
+            nvim.execute_lua("tree.print_message(...)", vec![message])
                 .await?;
             return Err(Box::new(ArgError::new("File exists!")));
         }
@@ -991,7 +991,7 @@ impl Tree {
         if should_change_root {
             self.change_root(&info, nvim).await?;
         } else {
-            nvim.execute_lua("drop(...)", vec![args, Value::from(info)])
+            nvim.execute_lua("tree.drop(...)", vec![args, Value::from(info)])
                 .await?;
         }
         Ok(())

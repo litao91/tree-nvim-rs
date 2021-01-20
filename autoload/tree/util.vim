@@ -23,3 +23,18 @@ function! tree#util#cd(path) abort
     silent execute (haslocaldir() ? 'lcd' : 'cd') fnameescape(a:path)
   endif
 endfunction
+
+function! tree#util#input(prompt, ...) abort
+  let text = get(a:000, 0, '')
+  let completion = get(a:000, 1, '')
+  try
+    if completion !=# ''
+      return input(a:prompt, text, completion)
+    else
+      return input(a:prompt, text)
+    endif
+  catch
+    " ignore the errors
+    return ''
+  endtry
+endfunction
