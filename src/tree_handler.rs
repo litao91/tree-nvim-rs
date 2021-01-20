@@ -83,8 +83,6 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
             tree.config.update(&cfg_map)?;
         }
 
-        data.prev_bufnr = Some(bufnr.clone());
-
         let start = std::time::Instant::now();
         tree.change_root(path, &nvim).await?;
         info!("change root took: {} secs", start.elapsed().as_secs_f64());
@@ -146,8 +144,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
                 data.tree_bufs.push(prev_bufnr);
                 bufnr_vals = Value::Array(data.tree_bufs.iter().rev().cloned().collect());
             }
-            nvim.command("lua require('tree')").await?;
-            nvim.execute_lua("resume(...)", vec![bufnr_vals, tree_cfg])
+            nvim.execute_lua("tree.resume(...)", vec![bufnr_vals, tree_cfg])
                 .await?;
         }
         Ok(())

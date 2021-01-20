@@ -63,8 +63,8 @@ function M.resume(bufnrs, cfg)
   -- check bufnrs
   local deadbufs = {}
   local treebufs = {}
-  for i, bufnr in pairs(bufnrs) do
-    loaded = buf_is_loaded(bufnr)
+  for _, bufnr in pairs(bufnrs) do
+    local loaded = buf_is_loaded(bufnr)
     if loaded then
       table.insert(treebufs, bufnr)
     else
@@ -75,7 +75,7 @@ function M.resume(bufnrs, cfg)
 
   local find = false
   -- TODO: send delete notify when -1.
-  for i, bufnr in pairs(treebufs) do
+  for _, bufnr in pairs(treebufs) do
     local winid = call('bufwinid', {bufnr})
     if winid > 0 then
       print('goto winid', winid)
@@ -663,7 +663,7 @@ function user_options()
     session_file='',
     show_ignored_files=false,
     sort='filename',
-    toggle=false,
+    toggle=true,
   }, default_etc_options())
 end
 
