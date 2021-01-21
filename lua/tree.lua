@@ -52,7 +52,7 @@ end
 -- otherwise, create a new window.
 -- @param bufnrs table: trees bufnrs ordered by recently used.
 -- @return nil.
-function M.resume(bufnrs, cfg)
+function M.resume(bufnrs)
   if bufnrs == nil then
     return
   end
@@ -97,7 +97,6 @@ function M.resume(bufnrs, cfg)
   if etc.split == 'tab' then
     cmd 'tabnew'
   end
-  print('split: ', etc.split)
   if etc.split == 'vertical' then
     vertical = 'vertical'
     resize_cmd = string.format('vertical resize %d', etc.winwidth)
@@ -137,6 +136,20 @@ function M.resume(bufnrs, cfg)
   cmd "se nolist"
   cmd "se signcolumn=no"
   a.nvim_win_set_option(winid, 'wrap', false)
+end
+
+function M.resize(size)
+  local resize_cmd
+  if etc.split == 'vertical' then
+    etc.winwidth=size
+    resize_cmd = string.format('vertical resize %d', etc.winwidth)
+  elseif etc.split == 'horizontal' then
+    etc.winheight=size
+    resize_cmd = string.format('resize %d', etc.winheight)
+  end
+  if resize_cmd ~= nil then
+    cmd(resize_cmd)
+  end
 end
 
 --- Drop file.
@@ -311,6 +324,7 @@ function M.string(expr)
     return vim.fn.string(expr)
   end
 end
+
 function M.call_tree(command, args)
   local paths, context = __parse_options(args)
   try {
@@ -392,12 +406,14 @@ function __parse_options(cmdline)
 
   return args, options
 end
+
 function __expand(path)
   if path:find('^~') then
     path = vim.fn.fnamemodify(path, ':p')
   end
   return __substitute_path_separator(path)
 end
+
 function __remove_quote_pairs(s)
   -- remove leading/ending quote pairs
   local t = s
@@ -408,6 +424,7 @@ function __remove_quote_pairs(s)
   end
   return t
 end
+
 function __substitute_path_separator(path)
   if is_windows then
     return vim.fn.substitute(path, '\\', '/', 'g')
@@ -498,15 +515,10 @@ function M.new_file(args)
   print(ret)
   rpcrequest('function', {"new_file", {ret, args.bufnr}}, true)
 end
-function M.rename(args)
-  print(inspect(args))
-  ret = fn.input(args.prompt, args.text, args.completion)
-  if ret == "" then
-    M.print_message("Cancel")
-    return
-  end
-  rpcrequest('function', {"rename", {ret, args.bufnr}}, true)
+
+function M.resize(size)
 end
+
 function M.error(str)
   local cmd = string.format('echomsg "[tree] %s"', str)
   a.nvim_command('echohl Error')

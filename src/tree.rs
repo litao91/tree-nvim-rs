@@ -160,7 +160,6 @@ pub struct Config {
     pub buffer_name: String,
 
     pub direction: String,
-    pub split: SplitType,
     pub winrelative: String,
     pub winheight: u16,
     pub winwidth: u16,
@@ -175,10 +174,6 @@ impl Config {
         Value::Map(vec![
             (Value::from("winwidth"), Value::from(self.winwidth)),
             (Value::from("winheight"), Value::from(self.winheight)),
-            (
-                Value::from("split"),
-                Value::from(Into::<&str>::into(self.split.clone())),
-            ),
             (Value::from("new"), Value::from(self.new)),
             (Value::from("toggle"), Value::from(self.toggle)),
             (
@@ -215,7 +210,6 @@ impl Default for Config {
             buffer_name: String::from("string"),
 
             direction: String::new(),
-            split: SplitType::Vertical,
             winrelative: String::from("editor"),
             winheight: 30,
             winwidth: 50,
@@ -322,15 +316,6 @@ impl Config {
                 "session_file" => self.session_file = val_to_string(v)?,
                 "sort" => self.sort = val_to_string(v)?,
                 "winrelative" => self.winrelative = val_to_string(v)?,
-                "split" => {
-                    self.split = SplitType::from(match v.as_str() {
-                        Some(s) => s,
-                        None => {
-                            return Err(Box::new(crate::errors::ArgError::new("Str type expected")))
-                        }
-                    })
-                }
-
                 "columns" => {
                     self.columns.clear();
                     for col in match v.as_str() {
@@ -617,23 +602,6 @@ impl Tree {
         Ok(())
     }
 
-    pub async fn resize_window<W: AsyncWrite + Send + Sync + Unpin + 'static>(
-        &mut self,
-        nvim: &Neovim<W>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let window = nvim.get_current_win().await?;
-        if self.config.split == SplitType::Vertical && self.config.winwidth > 0 {
-            let cmd = format!("vertical resize {}", self.config.winwidth);
-            window.set_option("winfixwidth", Value::from(true)).await?;
-            nvim.command(&cmd).await?;
-        } else if self.config.split == SplitType::Horizontal && self.config.winheight > 0 {
-            window.set_option("winfixheight", Value::from(true)).await?;
-            let cmd = format!("resize {}", self.config.winheight);
-            nvim.command(&cmd).await?;
-        }
-        Ok(())
-    }
-
     pub async fn action_resize<W: AsyncWrite + Send + Sync + Unpin + 'static>(
         &mut self,
         nvim: &Neovim<W>,
@@ -650,8 +618,8 @@ impl Tree {
         if args.is_empty() {
             return Ok(());
         }
-        self.config.winwidth = args[0].as_u64().unwrap() as u16;
-        self.resize_window(nvim).await?;
+        info!("{:?}", args);
+        nvim.execute_lua("tree.resize(...)", args).await?;
         Ok(())
     }
 
@@ -821,7 +789,8 @@ impl Tree {
 
         if new_path.exists() {
             let message = Value::from(format!("{} already exists", new_path.to_str().unwrap()));
-            nvim.execute_lua("tree.print_message(...)", vec![message]).await?;
+            nvim.execute_lua("tree.print_message(...)", vec![message])
+                .await?;
             return Err(Box::new(ArgError::new("File exists!")));
         }
         std::fs::rename(&cur.path, new_path)?;
