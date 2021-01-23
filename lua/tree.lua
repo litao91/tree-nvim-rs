@@ -42,6 +42,7 @@ local function default_etc_options()
     direction='',
     search='',
     new=false,
+    toggle=true,
     wincol=math.modf(vim.o.columns/4),
     winrow=math.modf(vim.o.lines/3)
   }
@@ -50,7 +51,7 @@ end
 function M.quit(bufnr)
   local etc = M.etc_options[bufnr]
   -- print('quit')
-  local winnr = call('bufwinnr', bufnr)
+  local winnr = call('bufwinnr', {bufnr})
   -- print('winnr: ', winnr)
   if winnr < 0 then
     return
@@ -109,8 +110,14 @@ function M.resume(bufnrs)
   for _, bufnr in pairs(treebufs) do
     local winid = call('bufwinid', {bufnr})
     if winid > 0 then
-      call('win_gotoid', {winid})
       find = true
+      if M.etc_options[bufnr].toggle then
+        print('toggle')
+        M.quit(bufnr)
+      else
+        print('goto winid', winid)
+        call('win_gotoid', {winid})
+      end
       return
     end
   end
@@ -711,7 +718,6 @@ function user_options()
     session_file='',
     show_ignored_files=false,
     sort='filename',
-    toggle=true,
   }, default_etc_options())
 end
 
