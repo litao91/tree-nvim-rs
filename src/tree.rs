@@ -157,31 +157,6 @@ pub struct Config {
     pub sort: String,
 
     pub listed: bool,
-    pub buffer_name: String,
-
-    pub direction: String,
-    pub winrelative: String,
-    pub winheight: u16,
-    pub winwidth: u16,
-    pub wincol: u16,
-    pub winrow: u16,
-    pub new: bool,
-    pub toggle: bool,
-}
-
-impl Config {
-    pub fn get_cfg_map(&self) -> Value {
-        Value::Map(vec![
-            (Value::from("winwidth"), Value::from(self.winwidth)),
-            (Value::from("winheight"), Value::from(self.winheight)),
-            (Value::from("new"), Value::from(self.new)),
-            (Value::from("toggle"), Value::from(self.toggle)),
-            (
-                Value::from("direction"),
-                Value::from(self.direction.clone()),
-            ),
-        ])
-    }
 }
 
 impl Default for Config {
@@ -207,16 +182,6 @@ impl Default for Config {
             sort: String::new(),
 
             listed: false,
-            buffer_name: String::from("string"),
-
-            direction: String::new(),
-            winrelative: String::from("editor"),
-            winheight: 30,
-            winwidth: 50,
-            wincol: 0,
-            winrow: 0,
-            new: false,
-            toggle: false,
         }
     }
 }
@@ -271,10 +236,6 @@ impl Config {
             info!("k: {:?}, v: {:?}", k, v);
             match k.as_str() {
                 "auto_recursive_level" => self.auto_recursive_level = val_to_u16(v)?,
-                "wincol" => self.wincol = val_to_u16(v)?,
-                "winheigth" => self.winheight = val_to_u16(v)?,
-                "winrow" => self.winrow = val_to_u16(v)?,
-                "winwidth" => self.winwidth = val_to_u16(v)?,
                 "auto_cd" => {
                     self.auto_cd = val_to_bool(v).map_err(|e| {
                         ArgError::from_string(format!("auto_cd need boolean type: {:?}", e))
@@ -283,11 +244,6 @@ impl Config {
                 "listed" => {
                     self.listed = val_to_bool(v).map_err(|e| {
                         ArgError::from_string(format!("Config: auto_cd need boolean type: {:?}", e))
-                    })?
-                }
-                "new" => {
-                    self.new = val_to_bool(v).map_err(|e| {
-                        ArgError::from_string(format!("Config: new need boolean type: {:?}", e))
                     })?
                 }
                 "profile" => {
@@ -303,19 +259,11 @@ impl Config {
                         ))
                     })?
                 }
-                "toggle" => {
-                    self.toggle = val_to_bool(v).map_err(|e| {
-                        ArgError::from_string(format!("toggle need boolean type: {:?}", e))
-                    })?
-                }
                 "root_marker" => self.root_marker = val_to_string(v)?,
-                "buffer_name" => self.buffer_name = val_to_string(v)?,
-                "direction" => self.direction = val_to_string(v)?,
                 "ignored_files" => self.ignored_files = val_to_string(v)?,
                 "search" => self.search = val_to_string(v)?,
                 "session_file" => self.session_file = val_to_string(v)?,
                 "sort" => self.sort = val_to_string(v)?,
-                "winrelative" => self.winrelative = val_to_string(v)?,
                 "columns" => {
                     self.columns.clear();
                     for col in match v.as_str() {
@@ -342,7 +290,7 @@ pub struct Tree {
     pub icon_ns_id: i64,
     pub config: Config,
     selected_items: HashSet<usize>,
-    fileitems: Vec<FileItemPtr>,
+    file_items: Vec<FileItemPtr>,
     expand_store: HashMap<String, bool>,
     col_map: HashMap<ColumnType, Vec<ColumnCell>>,
     targets: Vec<usize>,
@@ -377,7 +325,7 @@ impl Tree {
             bufnr,
             icon_ns_id,
             config: Default::default(),
-            fileitems: Default::default(),
+            file_items: Default::default(),
             expand_store: Default::default(),
             col_map: Default::default(),
             targets: Default::default(),
@@ -406,7 +354,7 @@ impl Tree {
     }
     pub fn update_git_map(&mut self) {
         if self.git_repo.is_none() {
-            self.init_git_repo(&self.fileitems[0].path.clone())
+            self.init_git_repo(&self.file_items[0].path.clone())
         }
         if let Some(ref mutex) = self.git_repo {
             if let Some(ref repo) = mutex.try_lock() {
@@ -476,7 +424,7 @@ impl Tree {
     }
 
     pub fn save_cursor(&mut self, ctx: &Context) {
-        if let Some(item) = self.fileitems.get(0) {
+        if let Some(item) = self.file_items.get(0) {
             if let Some(path) = item.path.to_str() {
                 self.cursor_history.insert(path.to_owned(), ctx.cursor);
             }
@@ -543,7 +491,7 @@ impl Tree {
         parent_idx: usize,
         force: bool,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let cur = match self.fileitems.get(parent_idx) {
+        let cur = match self.file_items.get(parent_idx) {
             Some(c) => c,
             None => return Err(Box::new(ArgError::new("Invalid index"))),
         }
@@ -553,7 +501,7 @@ impl Tree {
         let base_level = cur.level;
         let start = cur.id + 1;
         let mut end = start;
-        for fi in &self.fileitems[start..] {
+        for fi in &self.file_items[start..] {
             if fi.level <= base_level {
                 break;
             }
@@ -570,7 +518,7 @@ impl Tree {
             self.insert_items_and_cells(start, child_items)?;
             new_end = start + child_item_size;
         } else {
-            let cells = self.make_cells(&self.fileitems[start..end], start == 0);
+            let cells = self.make_cells(&self.file_items[start..end], start == 0);
             for (col, cells) in cells {
                 if !self.col_map.contains_key(&col) {
                     self.col_map.insert(col.clone(), Vec::new());
@@ -632,7 +580,7 @@ impl Tree {
         ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let paths_str = if self.selected_items.is_empty() {
-            self.fileitems[ctx.cursor as usize - 1]
+            self.file_items[ctx.cursor as usize - 1]
                 .path
                 .to_str()
                 .unwrap()
@@ -640,7 +588,7 @@ impl Tree {
         } else {
             self.selected_items
                 .iter()
-                .map(|x| self.fileitems[*x].path.to_str().unwrap().to_owned())
+                .map(|x| self.file_items[*x].path.to_str().unwrap().to_owned())
                 .collect::<Vec<String>>()
                 .join("\n")
         };
@@ -684,11 +632,11 @@ impl Tree {
             _ => false,
         };
         let targets: Vec<&FileItem> = if self.selected_items.is_empty() {
-            vec![&self.fileitems[ctx.cursor as usize - 1].as_ref()]
+            vec![&self.file_items[ctx.cursor as usize - 1].as_ref()]
         } else {
             self.selected_items
                 .iter()
-                .map(|x| self.fileitems[*x].as_ref())
+                .map(|x| self.file_items[*x].as_ref())
                 .collect()
         };
         if !force {
@@ -757,7 +705,7 @@ impl Tree {
         _arg: Value,
         _ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        for i in 0..self.fileitems.len() {
+        for i in 0..self.file_items.len() {
             if !self.selected_items.remove(&i) {
                 self.selected_items.insert(i);
             }
@@ -774,9 +722,9 @@ impl Tree {
     ) -> Result<(), Box<dyn std::error::Error>> {
         info!("{:?}", _arg);
         let idx = ctx.cursor as usize - 1;
-        let cur = &self.fileitems[idx];
+        let cur = &self.file_items[idx];
         let old_path = cur.path.to_str().unwrap();
-        let cwd = self.fileitems[0].path.to_str().unwrap();
+        let cwd = self.file_items[0].path.to_str().unwrap();
         let msg = format!("New name: {} -> ", old_path);
         let new_filename = Self::cwd_input(nvim, cwd, &msg, old_path, "file").await?;
         if new_filename.is_empty() {
@@ -810,7 +758,7 @@ impl Tree {
         ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let idx = ctx.cursor as usize - 1;
-        let cur = &self.fileitems[idx];
+        let cur = &self.file_items[idx];
         let cur_path_str = cur.path.to_str().unwrap();
         let idx_to_redraw;
         // idx == 0 => is_root
@@ -868,7 +816,7 @@ impl Tree {
         } else {
             return Err(Box::new(ArgError::new("func not defined")));
         };
-        let cur = &self.fileitems[ctx.cursor as usize - 1];
+        let cur = &self.file_items[ctx.cursor as usize - 1];
 
         let ctx = Value::Map(vec![(
             Value::from("targets"),
@@ -900,13 +848,13 @@ impl Tree {
                 return Ok(());
             };
             if dir == ".." {
-                match self.fileitems[0].path.clone().parent() {
+                match self.file_items[0].path.clone().parent() {
                     Some(p) => self.change_root(p.to_str().unwrap(), nvim).await?,
                     None => {}
                 }
             } else if dir == "." {
                 let cur_idx = ctx.cursor as usize - 1;
-                let cur = match self.fileitems.get(cur_idx) {
+                let cur = match self.file_items.get(cur_idx) {
                     Some(i) => i,
                     None => {
                         Err(ArgError::new("invalid cursor pos"))?;
@@ -949,7 +897,7 @@ impl Tree {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let info: String;
         let should_change_root;
-        if let Some(cur) = self.fileitems.get(ctx.cursor as usize - 1) {
+        if let Some(cur) = self.file_items.get(ctx.cursor as usize - 1) {
             info = cur.path.to_str().unwrap().to_owned();
             if cur.metadata.is_dir() {
                 should_change_root = true;
@@ -979,7 +927,7 @@ impl Tree {
         }
 
         // get the current
-        let target = match self.fileitems.get(idx) {
+        let target = match self.file_items.get(idx) {
             Some(fi) => fi,
             None => {
                 return Err(Box::new(ArgError::from_string(format!(
@@ -1004,7 +952,7 @@ impl Tree {
             let start = idx + 1;
             let base_level = target.level;
             let mut end = start;
-            for fi in &self.fileitems[start..] {
+            for fi in &self.file_items[start..] {
                 if fi.level <= base_level {
                     break;
                 }
@@ -1030,7 +978,7 @@ impl Tree {
         if idx == 0 {
             return Ok(());
         }
-        let cur = match self.fileitems.get(idx) {
+        let cur = match self.file_items.get(idx) {
             Some(fi) => fi,
             None => {
                 return Err(Box::new(ArgError::from_string(format!(
@@ -1075,7 +1023,7 @@ impl Tree {
         ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let idx = ctx.cursor as usize - 1;
-        let target = match self.fileitems.get(idx) {
+        let target = match self.file_items.get(idx) {
             Some(fi) => fi,
             None => {
                 return Err(Box::new(ArgError::from_string(format!(
@@ -1108,7 +1056,7 @@ impl Tree {
         ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let idx = ctx.cursor as usize - 1;
-        let target = match self.fileitems.get(idx) {
+        let target = match self.file_items.get(idx) {
             Some(fi) => fi,
             None => {
                 return Err(Box::new(ArgError::from_string(format!(
@@ -1133,7 +1081,7 @@ impl Tree {
         ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let idx = ctx.cursor as usize - 1;
-        let target = match self.fileitems.get(idx) {
+        let target = match self.file_items.get(idx) {
             Some(fi) => fi,
             None => {
                 return Err(Box::new(ArgError::from_string(format!(
@@ -1161,7 +1109,7 @@ impl Tree {
 
     pub fn update_cells(&mut self, sl: usize, el: usize) {
         // self.update_git_map();
-        let cells = self.make_cells(&self.fileitems[sl..el], sl == 0);
+        let cells = self.make_cells(&self.file_items[sl..el], sl == 0);
         for (col, cells) in cells {
             if !self.col_map.contains_key(&col) {
                 self.col_map.insert(col.clone(), Vec::new());
@@ -1172,7 +1120,7 @@ impl Tree {
 
     pub fn get_context_value(&self, cursor: usize) -> Value {
         let idx = cursor - 1;
-        let ft = self.fileitems.get(idx).unwrap();
+        let ft = self.file_items.get(idx).unwrap();
         info!("get context of: {:?}", ft.path);
         Value::Map(vec![
             (
@@ -1219,7 +1167,7 @@ impl Tree {
 
         self.targets.clear();
         self.col_map.clear();
-        self.fileitems.clear();
+        self.file_items.clear();
 
         let filemeta = std::fs::metadata(root_path_str)?;
         let mut fileitems = vec![Arc::new(FileItem::new(root_path, filemeta, 0))];
@@ -1229,7 +1177,7 @@ impl Tree {
 
         self.insert_items_and_cells(0, fileitems)?;
 
-        let ret = (0..self.fileitems.len())
+        let ret = (0..self.file_items.len())
             .map(|i| self.makeline(i))
             .collect();
         self.buf_set_lines(nvim, 0, -1, true, ret).await?;
@@ -1237,7 +1185,7 @@ impl Tree {
             let win = Window::new(Value::from(0), nvim.clone());
             win.set_cursor((0, v as i64)).await?;
         }
-        self.hl_lines(&nvim, 0, self.fileitems.len()).await?;
+        self.hl_lines(&nvim, 0, self.file_items.len()).await?;
         Ok(())
     }
 
@@ -1295,15 +1243,15 @@ impl Tree {
         for (_, val) in self.col_map.iter_mut() {
             val.splice(start..end, vec![]);
         }
-        self.fileitems.splice(start..end, vec![]);
+        self.file_items.splice(start..end, vec![]);
         for i in start..end {
             self.selected_items.remove(&i);
         }
 
         // items after the deleted
-        if start < self.fileitems.len() {
-            for i in start..self.fileitems.len() {
-                let fi = self.fileitems[i].as_ref();
+        if start < self.file_items.len() {
+            for i in start..self.file_items.len() {
+                let fi = self.file_items[i].as_ref();
                 // replace the old id with the new id for selected items
                 if self.selected_items.remove(&fi.id) {
                     self.selected_items.insert(i);
@@ -1326,17 +1274,17 @@ impl Tree {
         pos: usize,
         items: Vec<FileItemPtr>,
     ) -> Result<(), ArgError> {
-        if pos > self.fileitems.len() {
+        if pos > self.file_items.len() {
             return Err(ArgError::new("pos larger than the fileitem size"));
         }
         let is_first_item_root = pos == 0;
         // insert items
         let size_to_insert = items.len();
-        self.fileitems.splice(pos..pos, items.iter().cloned());
+        self.file_items.splice(pos..pos, items.iter().cloned());
         // update the indices
-        if pos + size_to_insert < self.fileitems.len() {
-            for i in pos + size_to_insert..self.fileitems.len() {
-                let fi = self.fileitems[i].as_ref();
+        if pos + size_to_insert < self.file_items.len() {
+            for i in pos + size_to_insert..self.file_items.len() {
+                let fi = self.file_items[i].as_ref();
                 if self.selected_items.remove(&fi.id) {
                     self.selected_items.insert(i);
                 }

@@ -38,3 +38,13 @@ function! tree#util#input(prompt, ...) abort
     return ''
   endtry
 endfunction
+
+function! tree#util#confirm(msg, choices, default) abort
+  try
+    return confirm(a:msg, a:choices, a:default)
+  catch
+    " ignore the errors
+  endtry
+
+  return a:default
+endfunction

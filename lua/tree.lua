@@ -47,6 +47,37 @@ local function default_etc_options()
   }
 end
 
+function M.quit(bufnr)
+  local etc = M.etc_options[bufnr]
+  -- print('quit')
+  local winnr = call('bufwinnr', bufnr)
+  -- print('winnr: ', winnr)
+  if winnr < 0 then
+    return
+  end
+  local prev_winid = 0
+  if winnr ~= call('winnr', {}) then
+    prev_winid = call('win_getid')
+  end
+
+  -- move to the tree's win
+  cmd(string.format('%dwincmd w', winnr))
+  if etc.split == 'no' or etc.split == 'tab' then
+    if call('bufexists', etc.prev_bufnr) and etc.prev_bufnr ~= call('bufnr', '%') then
+      cmd(string.format(string.format('buffer %d', etc.prev_bufnr)))
+    else
+      cmd('enew')
+    end
+  else
+    if call('winnr', {'$'}) ~= 1 then
+      cmd('close')
+      call('win_gotoid', {prev_winid})
+    else
+      cmd('enew')
+    end
+  end
+end
+
 --- Resume tree window.
 -- If the window corresponding to bufnrs is available, goto it;
 -- otherwise, create a new window.
@@ -78,7 +109,6 @@ function M.resume(bufnrs)
   for _, bufnr in pairs(treebufs) do
     local winid = call('bufwinid', {bufnr})
     if winid > 0 then
-      print('goto winid', winid)
       call('win_gotoid', {winid})
       find = true
       return

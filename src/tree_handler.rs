@@ -120,7 +120,6 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         // info!("Create tree took {} secs", start.elapsed().as_secs_f64());
         } else {
             let bufnr_vals;
-            let tree_cfg;
             {
                 // only a few items, wouldn't be a problem
                 let prev_bufnr = match &data.prev_bufnr {
@@ -136,12 +135,11 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
                     None => return Err(Box::new(ArgError::new("unknown tree"))),
                 };
                 tree.config.update(&cfg_map)?;
-                tree_cfg = tree.config.get_cfg_map();
                 data.tree_bufs.retain(|v| v != &prev_bufnr);
                 data.tree_bufs.push(prev_bufnr);
                 bufnr_vals = Value::Array(data.tree_bufs.iter().rev().cloned().collect());
             }
-            nvim.execute_lua("tree.resume(...)", vec![bufnr_vals, tree_cfg])
+            nvim.execute_lua("tree.resume(...)", vec![bufnr_vals])
                 .await?;
         }
         Ok(())
