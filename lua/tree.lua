@@ -138,8 +138,10 @@ function M.resume(bufnrs)
   a.nvim_win_set_option(winid, 'wrap', false)
 end
 
-function M.resize(size)
+function M.resize(size, bufnr)
+  print(size)
   local resize_cmd
+  local etc = M.etc_options[bufnr];
   if etc.split == 'vertical' then
     etc.winwidth=size
     resize_cmd = string.format('vertical resize %d', etc.winwidth)
@@ -514,9 +516,6 @@ function M.new_file(args)
   ret = fn.input(args.prompt, args.text, args.completion)
   print(ret)
   rpcrequest('function', {"new_file", {ret, args.bufnr}}, true)
-end
-
-function M.resize(size)
 end
 
 function M.error(str)

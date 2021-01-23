@@ -608,7 +608,7 @@ impl Tree {
         arg: Value,
         _ctx: Context,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let args = match arg {
+        let mut args = match arg {
             Value::Array(v) => v,
             _ => {
                 Err(ArgError::new("Invalid arg type"))?;
@@ -618,7 +618,9 @@ impl Tree {
         if args.is_empty() {
             return Ok(());
         }
-        info!("{:?}", args);
+        args.push(self.bufnr.clone());
+        info!(" args for resize: {:?}", args);
+        // nvim.execute_lua("tree.print_message(...)", vec![Value::from("hello".to_owned())]).await?;
         nvim.execute_lua("tree.resize(...)", args).await?;
         Ok(())
     }
