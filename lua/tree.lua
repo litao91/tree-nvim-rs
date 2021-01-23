@@ -105,17 +105,15 @@ function M.resume(bufnrs)
   end
   -- print("treebufs:", vim.inspect(treebufs))
 
-  local find = false
   -- TODO: send delete notify when -1.
   for _, bufnr in pairs(treebufs) do
     local winid = call('bufwinid', {bufnr})
     if winid > 0 then
-      find = true
       if M.etc_options[bufnr].toggle then
-        print('toggle')
+        -- print('toggle')
         M.quit(bufnr)
       else
-        print('goto winid', winid)
+        -- print('goto winid', winid)
         call('win_gotoid', {winid})
       end
       return
@@ -159,9 +157,7 @@ function M.resume(bufnrs)
     end
     str = string.format("silent keepalt %s %s %s %d", direction, vertical, command, bufnr)
 
-    if not find then
-      cmd(str)
-    end
+    cmd(str)
 
     if resize_cmd ~= nil then
       cmd(resize_cmd)
