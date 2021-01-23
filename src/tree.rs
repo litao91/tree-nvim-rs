@@ -1502,4 +1502,14 @@ impl Tree {
         }
         Ok(())
     }
+
+    pub async fn func_paste<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &self,
+        nvim: &Neovim<W>,
+        ln: u64,
+        src: &str,
+        dest: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
+    }
 }

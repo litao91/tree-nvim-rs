@@ -98,7 +98,9 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> TreeHandler<W> {
         // let start = std::time::Instant::now();
         // let nvim = nvim.clone();
         // async_std::task::spawn(async move {
-        nvim.execute_lua("tree.resume(...)", vec![bufnr]).await.unwrap();
+        nvim.execute_lua("tree.resume(...)", vec![bufnr])
+            .await
+            .unwrap();
         // });
         // info!("resume took: {} secs", start.elapsed().as_secs_f64());
         Ok(())
@@ -320,6 +322,27 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                             action,
                             start.elapsed().as_secs_f64()
                         );
+                    }
+                }
+            }
+        }
+
+        if name == "_tree_async_func" {
+            let func_name = args[0].as_str().unwrap();
+            if (func_name == "paste") {
+                let fargs = args[1].as_array().unwrap();
+                let pos = fargs[0].as_array().unwrap();
+                let src = fargs[1].as_str().unwrap();
+                let dest = fargs[2].as_str().unwrap();
+                let buf = pos[0].as_u64().unwrap();
+                let line = pos[1].as_u64().unwrap();
+                {
+                    let mut d = self.data.write().await;
+                    if let Some(tree) = d
+                        .bufnr_to_tree
+                        .get_mut(&bufnr_val_to_tuple(&Value::from(buf)).unwrap())
+                    {
+                        tree.func_paste(&neovim, line, src, dest).await;
                     }
                 }
             }
