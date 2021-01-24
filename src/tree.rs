@@ -1,8 +1,8 @@
 use crate::column::ColumnType;
 use crate::column::{ColumnCell, FileItem, FileItemPtr};
 use crate::errors::ArgError;
-use async_std::sync::Arc;
-use async_std::sync::Mutex;
+use async_std::sync::{Arc, Mutex, RwLock};
+use fs_extra;
 use futures::io::AsyncWrite;
 use git2::{Repository, Status};
 use log::*;
@@ -107,39 +107,12 @@ impl Context {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SplitType {
-    Vertical,
-    Horizontal,
-    No,
-    Tab,
-    Floating,
+pub enum ClipboardMode {
+    COPY,
+    MOVE,
 }
 
-impl Into<&'static str> for SplitType {
-    fn into(self) -> &'static str {
-        match self {
-            SplitType::Vertical => "vertical",
-            SplitType::Horizontal => "horizontal",
-            SplitType::No => "no",
-            SplitType::Tab => "tab",
-            SplitType::Floating => "floating",
-        }
-    }
-}
-
-impl From<&str> for SplitType {
-    fn from(s: &str) -> SplitType {
-        match s {
-            "vertical" => SplitType::Vertical,
-            "horizontal" => SplitType::Horizontal,
-            "no" => SplitType::No,
-            "tab" => SplitType::Tab,
-            "floating" => SplitType::Floating,
-            _ => SplitType::Vertical,
-        }
-    }
-}
+static CLIPBOARD_MODE: RwLock<ClipboardMode> = RwLock::new(ClipboardMode::COPY);
 
 // State parameters for Tree
 #[derive(Debug)]
@@ -1510,6 +1483,31 @@ impl Tree {
         src: &str,
         dest: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let mode;
+        {
+            let clipboard_mode = CLIPBOARD_MODE.read().await;
+            match *clipboard_mode {
+                ClipboardMode::COPY => {
+                    mode = ClipboardMode::COPY;
+                }
+                ClipboardMode::MOVE => {
+                    mode = ClipboardMode::MOVE;
+                }
+            }
+        }
+        let from_path = Path::new(src);
+        let to_path = Path::new(dest);
+        let is_dir = std::fs::metadata(from_path).unwrap().is_dir();
+        match mode {
+            ClipboardMode::COPY => {
+                if is_dir {
+                    fs_extra::dir::copy(&from_path, &to_path, &fs_extra::dir::CopyOptions::new())?;
+                } else {
+                    std::fs::copy(from_path, to_path)?;
+                }
+            }
+            ClipboardMode::MOVE => {}
+        }
         Ok(())
     }
 }
