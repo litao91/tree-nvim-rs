@@ -113,6 +113,7 @@ pub enum ClipboardMode {
 }
 
 static CLIPBOARD_MODE: RwLock<ClipboardMode> = RwLock::new(ClipboardMode::COPY);
+static CLIPBOARD: RwLock<Vec<std::path::PathBuf>> = RwLock::new(Vec::new());
 
 // State parameters for Tree
 #[derive(Debug)]
@@ -386,6 +387,9 @@ impl Tree {
             "redraw" => self.action_redraw(nvim, args, ctx).await,
             "resize" => self.action_resize(nvim, args, ctx).await,
             "update_git_map" => self.action_update_git_map(nvim, args, ctx).await,
+            "copy" => self.action_copy(nvim, args, ctx).await,
+            "move" => self.action_move(nvim, args, ctx).await,
+            "paste" => self.action_paste(nvim, args, ctx).await,
             _ => {
                 error!("Unknown action: {}", action);
                 return;
@@ -1476,10 +1480,145 @@ impl Tree {
         Ok(())
     }
 
-    pub async fn func_paste<W: AsyncWrite + Send + Sync + Unpin + 'static>(
-        &self,
+    pub async fn action_copy<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
         nvim: &Neovim<W>,
-        ln: u64,
+        _arg: Value,
+        ctx: Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        {
+            (*CLIPBOARD_MODE.write().await) = ClipboardMode::COPY;
+        }
+        self.copy_or_move(ctx).await?;
+        nvim.execute_lua(
+            "tree.print_message(...)",
+            vec![Value::from("Copy to clipboard")],
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn action_move<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        _arg: Value,
+        ctx: Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        {
+            (*CLIPBOARD_MODE.write().await) = ClipboardMode::MOVE;
+        }
+        self.copy_or_move(ctx).await?;
+        nvim.execute_lua(
+            "tree.print_message(...)",
+            vec![Value::from("Move to clipboard")],
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn copy_or_move(&self, ctx: Context) -> Result<(), Box<dyn std::error::Error>> {
+        let mut clipboard = CLIPBOARD.write().await;
+        clipboard.clear();
+        if self.selected_items.is_empty() {
+            clipboard.push(self.file_items[ctx.cursor as usize - 1].path.clone());
+        } else {
+            clipboard.extend(
+                self.selected_items
+                    .iter()
+                    .map(|x| self.file_items[*x].path.clone()),
+            )
+        }
+
+        Ok(())
+    }
+    pub async fn action_paste<W: AsyncWrite + Sync + Send + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        _arg: Value,
+        ctx: Context,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let clipboard_empty = { CLIPBOARD.read().await.is_empty() };
+        if clipboard_empty {
+            nvim.execute_lua(
+                "tree.print_message(...)",
+                vec![Value::from("Nothing in clipboard")],
+            )
+            .await?;
+            return Ok(());
+        }
+        let items: Vec<_> = { CLIPBOARD.read().await.iter().map(|x| x.clone()).collect() };
+        for item in items {
+            if !item.exists() {
+                continue;
+            }
+            let cur = self.file_items[ctx.cursor as usize - 1].as_ref();
+            let dest_fname = item.file_name().unwrap().to_str().unwrap().to_owned();
+            let cur_dir = cur.path.parent().unwrap().to_path_buf();
+            let mut dest_file = cur_dir.clone();
+            dest_file.push(PathBuf::from(dest_fname).as_path());
+            info!("dest_file: {:?}", dest_file);
+            if dest_file.exists() {
+                let dest_meta = std::fs::metadata(&dest_file)?;
+                let src_meta = std::fs::metadata(&item)?;
+                let dest = Value::from(vec![
+                    (
+                        Value::from("mtime"),
+                        Value::from(
+                            dest_meta
+                                .modified()?
+                                .duration_since(std::time::SystemTime::UNIX_EPOCH)?
+                                .as_secs(),
+                        ),
+                    ),
+                    (
+                        Value::from("path"),
+                        Value::from(dest_file.as_os_str().to_str().unwrap()),
+                    ),
+                    (Value::from("size"), Value::from(dest_meta.len())),
+                ]);
+                let src = Value::from(vec![
+                    (
+                        Value::from("mtime"),
+                        Value::from(
+                            src_meta
+                                .modified()?
+                                .duration_since(std::time::SystemTime::UNIX_EPOCH)?
+                                .as_secs(),
+                        ),
+                    ),
+                    (
+                        Value::from("path"),
+                        Value::from(item.as_os_str().to_str().unwrap()),
+                    ),
+                    (Value::from("size"), Value::from(src_meta.len())),
+                ]);
+                nvim.execute_lua(
+                    "tree.pre_paste(...)",
+                    vec![
+                        Value::from(vec![self.bufnr.clone(), Value::from(ctx.cursor as u64 - 1)]),
+                        src,
+                        dest,
+                    ],
+                )
+                .await?;
+            } else {
+                self.func_paste(
+                    nvim,
+                    ctx.cursor - 1,
+                    item.as_os_str().to_str().unwrap(),
+                    dest_file.as_os_str().to_str().unwrap(),
+                )
+                .await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn func_paste<W: AsyncWrite + Send + Sync + Unpin + 'static>(
+        &mut self,
+        nvim: &Neovim<W>,
+        idx: u64,
         src: &str,
         dest: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -1505,8 +1644,18 @@ impl Tree {
                 } else {
                     std::fs::copy(from_path, to_path)?;
                 }
+                let idx_to_redraw =
+                    if let Some(parent) = self.file_items[idx as usize].parent.as_ref() {
+                        parent.id
+                    } else {
+                        0
+                    };
+                self.redraw_subtree(nvim, idx_to_redraw, true).await?;
             }
-            ClipboardMode::MOVE => {}
+            ClipboardMode::MOVE => {
+                std::fs::rename(from_path, to_path)?;
+                self.redraw_subtree(nvim, 0, true).await?;
+            }
         }
         Ok(())
     }

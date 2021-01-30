@@ -211,7 +211,7 @@ end
 --- Used to process files with the same name
 -- def check_overwrite(view: View, dest: Path, src: Path) -> Path:
 -- dest/src: {mtime=, path=, size=}
-function M.pre_paste(pos, dest, src)
+function M.pre_paste(pos, src, dest)
   -- print(vim.inspect(dest))
   local d_mtime = dest.mtime
   local s_mtime = src.mtime
@@ -291,6 +291,9 @@ M.callback = {}
 function M.keymap(lhs, ...)
   -- TODO: call directly uses lua callback
   local action_set = {
+    copy=true,
+    paste=true,
+    move=true,
     drop=true, open_tree=true, close_tree=true, open_or_close_tree=true,
     open_directory=true, cd=true, call=true, new_file=true, rename=true,
     toggle_select=true,
