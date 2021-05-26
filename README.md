@@ -9,9 +9,9 @@ Inspired by [tree.nvim](https://github.com/zgpio/tree.nvim) and Defx, in fact th
 ## TODO
 
 - [x] cd
-- [ ] copy
+- [x] copy
 - [x] drop
-- [ ] move
+- [x] move
 - [ ] open
 - [ ] multi
 - [ ] remove_trash

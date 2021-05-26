@@ -767,7 +767,7 @@ impl ColumnCell {
                 }
             }
             ColumnType::FILENAME => {
-                hl_group = Some(GuiColor::YELLOW.hl_group_name().to_owned());
+                hl_group = Some(GuiColor::WHITE.hl_group_name().to_owned());
                 if is_root_cell {
                     text = tree.config.root_marker.clone();
                     text.push_str(path_str);

@@ -1497,7 +1497,10 @@ impl Tree {
         ];
         let nvim_c = nvim.clone();
         async_std::task::spawn(async move {
-            nvim_c.execute_lua("tree.hl_lines(...)", args).await.unwrap();
+            nvim_c
+                .execute_lua("tree.hl_lines(...)", args)
+                .await
+                .unwrap();
         });
         Ok(())
     }
