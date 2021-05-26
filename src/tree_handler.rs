@@ -19,9 +19,9 @@ fn bufnr_val_to_tuple(val: &Value) -> Option<(i8, Vec<u8>)> {
     }
 }
 
-fn tuple_to_bufnr_val(v: &(i8, Vec<u8>)) -> Value {
-    Value::Ext(v.0.clone(), v.1.clone())
-}
+// fn tuple_to_bufnr_val(v: &(i8, Vec<u8>)) -> Value {
+//     Value::Ext(v.0.clone(), v.1.clone())
+// }
 
 #[derive(Default, Debug)]
 pub struct TreeHandlerData {
