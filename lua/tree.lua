@@ -594,6 +594,17 @@ function M.print_message(str)
     a.nvim_command(cmd)
 end
 
+function M.hl_lines(bufnr, icon_ns_id, args)
+    for i = 1, #args, 4 do
+        hl_group = args[i]
+        start_pos = args[i + 1]
+        end_pos = args[i + 2]
+        row = args[i + 3]
+        a.nvim_buf_add_highlight(bufnr, icon_ns_id, hl_group, row, start_pos,
+                                 end_pos)
+    end
+end
+
 function rpcrequest(method, args, is_async)
     if not M.channel_id then
         -- TODO: temporary

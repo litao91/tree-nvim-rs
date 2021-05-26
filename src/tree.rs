@@ -1167,7 +1167,7 @@ impl Tree {
                 v as i64
             };
             match win.set_cursor((cursor_pos, 0)).await {
-                Ok(_) => {}, 
+                Ok(_) => {}
                 Err(e) => warn!("Fail to set cursor position {}: {:?}", cursor_pos, e),
             };
         }
@@ -1468,23 +1468,36 @@ impl Tree {
         sl: usize,
         el: usize,
     ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut hl_args = Vec::<Value>::new();
+        let icon_ns_id = self.icon_ns_id;
         for i in sl..el {
             for col in &self.config.columns {
                 let cell = &self.col_map.get(col).unwrap()[i];
                 if let Some(hl_group) = cell.hl_group.clone() {
-                    let buf = Buffer::new(self.bufnr.clone(), nvim.clone());
-                    let icon_ns_id = self.icon_ns_id;
+                    // let buf = Buffer::new(self.bufnr.clone(), nvim.clone());
                     let start = cell.byte_start as i64;
                     let end = (cell.byte_start + cell.text.len()) as i64;
-                    async_std::task::spawn(async move {
-                        let hl_group = hl_group;
-                        buf.add_highlight(icon_ns_id, &hl_group, i as i64, start, end)
-                            .await
-                            .unwrap();
-                    });
+                    hl_args.push(Value::from(hl_group));
+                    hl_args.push(Value::from(start));
+                    hl_args.push(Value::from(end));
+                    hl_args.push(Value::from(i));
+                    // async_std::task::spawn(async move {
+                    //     let hl_group = hl_group;
+                    //     buf.add_highlight(icon_ns_id, &hl_group, i as i64, start, end)
+                    //         .await
+                    //         .unwrap();
+                    // });
                 }
             }
         }
+        let args = vec![
+            self.bufnr.clone(),
+            Value::from(icon_ns_id),
+            Value::from(hl_args),
+        ];
+        async_std::task::spawn(async move {
+            nvim.execute_lua("tree.hl_lines(...)", args).await.unwrap();
+        });
         Ok(())
     }
 
