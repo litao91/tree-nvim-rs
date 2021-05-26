@@ -329,7 +329,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
 
         if name == "_tree_async_func" {
             let func_name = args[0].as_str().unwrap();
-            if (func_name == "paste") {
+            if func_name == "paste" {
                 let fargs = args[1].as_array().unwrap();
                 let pos = fargs[0].as_array().unwrap();
                 let src = fargs[1].as_str().unwrap();
@@ -342,7 +342,12 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                         .bufnr_to_tree
                         .get_mut(&bufnr_val_to_tuple(&Value::from(buf)).unwrap())
                     {
-                        tree.func_paste(&neovim, line, src, dest).await;
+                        match tree.func_paste(&neovim, line, src, dest).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("paste error: {:?}", e);
+                            }
+                        }
                     }
                 }
             }

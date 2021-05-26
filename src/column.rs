@@ -564,7 +564,7 @@ impl From<&str> for ColumnType {
             "size" => ColumnType::SIZE,
             "time" => ColumnType::TIME,
             "space" => ColumnType::SPACE,
-            _ => panic!(format!("Error! unknown column type: {}", s)),
+            _ => panic!("Error! unknown column type: {}", s),
         }
     }
 }
