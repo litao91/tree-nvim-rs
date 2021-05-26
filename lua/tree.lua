@@ -594,6 +594,12 @@ function M.print_message(str)
     a.nvim_command(cmd)
 end
 
+function M.run_commands_batch(args)
+  for i = 1, #args do
+    a.nvim_command(args[i])
+  end
+end
+
 function M.hl_lines(bufnr, icon_ns_id, args)
     for i = 1, #args, 4 do
         hl_group = args[i]

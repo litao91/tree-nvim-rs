@@ -80,17 +80,19 @@ where
         .unwrap();
     info!("Set chan to {} done!", chan);
 
+    let mut commands = Vec::new();
     for icon in column::ICONS {
         let name = icon.hl_group_name();
         let color = icon.as_glyph_and_color().1;
         let cmd = format!("hi {} guifg={}", name, color);
-        nvim.command(&cmd).await.unwrap();
+        commands.push(Value::from(cmd));
     }
 
     for color in column::GUI_COLORS {
         let cmd = format!("hi {} guifg={}", color.hl_group_name(), color.color_val(),);
-        nvim.command(&cmd).await.unwrap();
+        commands.push(Value::from(cmd));
     }
+    nvim.execute_lua("require('tree').run_commands_batch(...)", vec![Value::from(commands)]).await.unwrap();
 }
 
 async fn run(args: Vec<String>) {
