@@ -1158,11 +1158,19 @@ impl Tree {
             .map(|i| self.makeline(i))
             .collect();
         self.buf_set_lines(nvim, 0, -1, true, ret).await?;
+        self.hl_lines(&nvim, 0, self.file_items.len()).await?;
         if let Some(v) = last_cursor {
             let win = Window::new(Value::from(0), nvim.clone());
-            win.set_cursor((0, v as i64)).await?;
+            let cursor_pos = if v as usize >= self.file_items.len() {
+                0_i64
+            } else {
+                v as i64
+            };
+            match win.set_cursor((cursor_pos, 0)).await {
+                Ok(_) => {}, 
+                Err(e) => warn!("Fail to set cursor position {}: {:?}", cursor_pos, e),
+            };
         }
-        self.hl_lines(&nvim, 0, self.file_items.len()).await?;
         Ok(())
     }
 
