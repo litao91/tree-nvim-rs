@@ -1495,8 +1495,9 @@ impl Tree {
             Value::from(icon_ns_id),
             Value::from(hl_args),
         ];
+        let nvim_c = nvim.clone();
         async_std::task::spawn(async move {
-            nvim.execute_lua("tree.hl_lines(...)", args).await.unwrap();
+            nvim_c.execute_lua("tree.hl_lines(...)", args).await.unwrap();
         });
         Ok(())
     }
