@@ -898,10 +898,6 @@ function M.start(_paths, user_ctx)
         ctx.bufnr = buf
     end
     rpcrequest('_tree_start', {paths, ctx}, false)
-    -- TODO: search path
-    -- if context['search'] !=# ''
-    --   call tree#call_action('search', [context['search']])
-    -- endif
 end
 
 function call_async_action(action, ...)
