@@ -1,6 +1,7 @@
 -- vim: set sw=2 sts=4 et tw=78 foldmethod=indent:
 -- :luafile %
 local a = vim.api
+local api = vim.api
 local inspect = vim.inspect
 local fn = vim.fn
 local eval = vim.api.nvim_eval
@@ -18,6 +19,7 @@ local info = debug.getinfo(1, "S")
 local sfile = info.source:sub(2) -- remove @
 local project_root = fn.fnamemodify(sfile, ':h:h')
 local custom = require('tree/custom')
+local view = require 'tree.view'
 
 -- https://gist.github.com/cwarden/1207556
 function catch(what) return what[1] end
@@ -59,8 +61,8 @@ function M.quit(bufnr)
     -- move to the tree's win
     cmd(string.format('%dwincmd w', winnr))
     if etc.split == 'no' or etc.split == 'tab' then
-        if etc.prev_bufnr ~= nil and call('bufexists', etc.prev_bufnr) and etc.prev_bufnr ~=
-            call('bufnr', '%') then
+        if etc.prev_bufnr ~= nil and call('bufexists', etc.prev_bufnr) and
+            etc.prev_bufnr ~= call('bufnr', '%') then
             cmd(string.format(string.format('buffer %d', etc.prev_bufnr)))
         else
             cmd('enew')
@@ -172,6 +174,75 @@ function M.resize(size, bufnr)
     if resize_cmd ~= nil then cmd(resize_cmd) end
 end
 
+---Get user to pick a window. Selectable windows are all windows in the current
+---tabpage that aren't NvimTree.
+---@return integer|nil -- If a valid window was picked, return its id. If an
+---       invalid window was picked / user canceled, return nil. If there are
+---       no selectable windows, return -1.
+function M.pick_window()
+    local tabpage = api.nvim_get_current_tabpage()
+    local win_ids = api.nvim_tabpage_list_wins(tabpage)
+    local tree_winid = view.View.tabpages[tabpage]
+
+    local selectable = vim.tbl_filter(function(id)
+        local win_config = api.nvim_win_get_config(id)
+        return id ~= tree_winid and win_config.focusable
+    end, win_ids)
+
+    -- If there are no selectable windows: return. If there's only 1, return it without picking.
+    if #selectable == 0 then return -1 end
+    if #selectable == 1 then return selectable[1] end
+
+    local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+    if vim.g.nvim_tree_window_picker_chars then
+        chars = tostring(vim.g.nvim_tree_window_picker_chars):upper()
+    end
+
+    local i = 1
+    local win_opts = {}
+    local win_map = {}
+    local laststatus = vim.o.laststatus
+    vim.o.laststatus = 2
+
+    -- Setup UI
+    for _, id in ipairs(selectable) do
+        local char = chars:sub(i, i)
+        local ok_status, statusline = pcall(api.nvim_win_get_option, id,
+                                            "statusline")
+        local ok_hl, winhl = pcall(api.nvim_win_get_option, id, "winhl")
+
+        win_opts[id] = {
+            statusline = ok_status and statusline or "",
+            winhl = ok_hl and winhl or ""
+        }
+        win_map[char] = id
+
+        api.nvim_win_set_option(id, "statusline", "%=" .. char .. "%=")
+        api.nvim_win_set_option(id, "winhl",
+                                "StatusLine:NvimTreeWindowPicker,StatusLineNC:NvimTreeWindowPicker")
+
+        i = i + 1
+        if i > #chars then break end
+    end
+
+    vim.cmd("redraw")
+    print("Pick window: ")
+    local _, resp = pcall(utils.get_user_input_char)
+    resp = (resp or ""):upper()
+    utils.clear_prompt()
+
+    -- Restore window options
+    for _, id in ipairs(selectable) do
+        for opt, value in pairs(win_opts[id]) do
+            api.nvim_win_set_option(id, opt, value)
+        end
+    end
+
+    vim.o.laststatus = laststatus
+
+    return win_map[resp]
+end
+
 --- Drop file.
 --- If the window corresponding to file is available, goto it;
 --- otherwise, goto prev window and edit file.
@@ -188,6 +259,9 @@ function M.drop(args, file)
         local prev_winnr = call('winnr', {'#'})
         local prev_winid = call('win_getid', {prev_winnr})
         call('win_gotoid', {prev_winid})
+        -- local target_win_id = M.pick_window()
+        -- print(target_win_id)
+        -- call('win_gotoid', {target_win_id})
         local str = string.format("%s %s", arg, file)
         cmd(str)
     end
@@ -321,7 +395,7 @@ func! Tree_set_keymap() abort
         end
         for i, arg in ipairs(args) do
             if type(arg) == 'function' then
-                M.callback[lhs] = arg
+               M.callback[lhs] = arg
                 expr = true
                 -- NOTE: When the parameter of action is function, it should be evaluated every time
                 -- print(string.format('arg: %s is function', vim.inspect(arg)))
@@ -596,9 +670,7 @@ function M.print_message(str)
 end
 
 function M.run_commands_batch(args)
-  for i = 1, #args do
-    a.nvim_command(args[i])
-  end
+    for i = 1, #args do a.nvim_command(args[i]) end
 end
 
 function M.hl_lines(bufnr, icon_ns_id, args)
@@ -759,7 +831,7 @@ local function internal_options()
     return {
         cursor = fn.line('.'),
         -- drives={},
-        prev_bufnr = fn.bufnr('%'),
+        prev_bufnr = a.nvim_get_current_buf(),
         prev_winid = fn.win_getid(),
         visual_start = s,
         visual_end = e
@@ -793,6 +865,19 @@ end
 
 -------------------- start of tree.vim --------------------
 -- NOTE: The buffer creation is done by the lua side
+
+M.Tree = {target_winid = nil}
+
+function M.set_target_win()
+    local id = a.nvim_get_current_win()
+    local tree_id = view.View.tabpages[api.nvim_get_current_tabpage()]
+    if tree_id and id == tree_id then
+        M.tree.target_winid = 0
+        return
+    end
+    M.Tree.target_winid = id
+end
+
 M.alive_buf_cnt = 0
 M.etc_options = {}
 local count = 0
