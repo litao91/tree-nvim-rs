@@ -4,10 +4,10 @@
 " License: MIT license
 "=============================================================================
 
-if exists('g:loaded_tree')
+if exists('g:loaded_tree_rs')
   finish
 endif
-let g:loaded_tree = 1
+let g:loaded_tree_rs = 1
 
 command! -nargs=* -range -bar -complete=customlist,v:lua.complete
       \ Tree
