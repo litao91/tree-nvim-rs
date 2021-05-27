@@ -48,7 +48,6 @@ end
 
 function M.quit(bufnr)
     local etc = M.etc_options[bufnr]
-    -- print('quit')
     local winnr = call('bufwinnr', {bufnr})
     -- print('winnr: ', winnr)
     if winnr < 0 then return end
@@ -58,7 +57,7 @@ function M.quit(bufnr)
     -- move to the tree's win
     cmd(string.format('%dwincmd w', winnr))
     if etc.split == 'no' or etc.split == 'tab' then
-        if call('bufexists', etc.prev_bufnr) and etc.prev_bufnr ~=
+        if etc.prev_bufnr ~= nil and call('bufexists', etc.prev_bufnr) and etc.prev_bufnr ~=
             call('bufnr', '%') then
             cmd(string.format(string.format('buffer %d', etc.prev_bufnr)))
         else
