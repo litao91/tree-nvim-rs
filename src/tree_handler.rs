@@ -205,7 +205,11 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                     match Self::start_tree(d.borrow_mut(), &nvim, path, cfg_map).await {
                         Err(e) => Err(Value::from(format!("Error: {:?}", e))),
                         _ => {
-                            info!("Start tree took {} secs", start.elapsed().as_secs_f64());
+                            info!(
+                                "Start tree took {} secs, at bufnr {:?}",
+                                start.elapsed().as_secs_f64(),
+                                d.prev_bufnr
+                            );
                             Ok(Value::Nil)
                         }
                     }
@@ -275,10 +279,16 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                 Value::Map(context_val) => {
                     for (k, v) in context_val {
                         let key = match k {
-                            Value::String(v) => v.into_str().unwrap(),
+                            Value::String(v) => match v.into_str() {
+                                Some(vv) => vv,
+                                None => {
+                                    error!("Can't convert to str");
+                                    continue;
+                                }
+                            },
                             _ => {
                                 error!("Key should be of type string");
-                                return;
+                                continue;
                             }
                         };
                         ctx.update(&key, v);
@@ -309,8 +319,8 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                     "Waited took {} secs for lock",
                     start.elapsed().as_secs_f64()
                 );
-                d.prev_bufnr = ctx.prev_bufnr.clone();
                 if let Some(bufnr) = ctx.prev_bufnr.clone() {
+                    d.prev_bufnr = Some(bufnr.clone());
                     if let Some(tree) = d
                         .bufnr_to_tree
                         .get_mut(&bufnr_val_to_tuple(&bufnr).unwrap())

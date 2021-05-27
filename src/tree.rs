@@ -46,7 +46,6 @@ pub struct Context {
 impl Context {
     pub fn update(&mut self, key: &str, val: Value) {
         match key {
-            "prev_bufnr" => self.prev_bufnr = Some(val),
             "cursor" => match val {
                 Value::Integer(v) => {
                     self.cursor = if let Some(v) = v.as_u64() {
@@ -87,7 +86,7 @@ impl Context {
                 }
             },
             _ => {
-                warn!("Unsupported member: {}", key);
+                warn!("Context: Unsupported member: {}", key);
             }
         }
     }
@@ -236,7 +235,7 @@ impl Config {
                         self.columns.push(ColumnType::from(col));
                     }
                 }
-                _ => error!("Unsupported member: {}", k),
+                _ => warn!("Config: Unsupported member: {}", k),
             };
         }
         Ok(())

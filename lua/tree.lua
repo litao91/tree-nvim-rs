@@ -52,7 +52,9 @@ function M.quit(bufnr)
     -- print('winnr: ', winnr)
     if winnr < 0 then return end
     local prev_winid = 0
-    if winnr ~= call('winnr', {}) then prev_winid = call('win_getid') end
+    if winnr ~= call('winnr', {}) then 
+      prev_winid = vim.fn.win_getid()
+    end
 
     -- move to the tree's win
     cmd(string.format('%dwincmd w', winnr))
