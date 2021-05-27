@@ -38,7 +38,6 @@ where
 pub struct Context {
     pub cursor: u64,
     pub drives: Vec<String>,
-    pub prev_winid: u64,
     pub visual_start: u64,
     pub visual_end: u64,
     pub prev_bufnr: Option<Value>,
@@ -51,19 +50,6 @@ impl Context {
             "cursor" => match val {
                 Value::Integer(v) => {
                     self.cursor = if let Some(v) = v.as_u64() {
-                        v
-                    } else {
-                        error!("Can't convert value {} to u64", val);
-                        return;
-                    }
-                }
-                _ => {
-                    error!("Unknown value: {}", val);
-                }
-            },
-            "prev_winid" => match val {
-                Value::Integer(v) => {
-                    self.prev_winid = if let Some(v) = v.as_u64() {
                         v
                     } else {
                         error!("Can't convert value {} to u64", val);
