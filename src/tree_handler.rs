@@ -319,8 +319,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin + 'static> Handler for TreeHandler<W> {
                     "Waited took {} secs for lock",
                     start.elapsed().as_secs_f64()
                 );
-                if let Some(bufnr) = ctx.prev_bufnr.clone() {
-                    d.prev_bufnr = Some(bufnr.clone());
+                if let Some(bufnr) = d.prev_bufnr.clone() {
                     if let Some(tree) = d
                         .bufnr_to_tree
                         .get_mut(&bufnr_val_to_tuple(&bufnr).unwrap())

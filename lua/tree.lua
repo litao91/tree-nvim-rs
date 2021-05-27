@@ -52,15 +52,13 @@ function M.quit(bufnr)
     -- print('winnr: ', winnr)
     if winnr < 0 then return end
     local prev_winid = 0
-    if winnr ~= call('winnr', {}) then 
-      prev_winid = vim.fn.win_getid()
-    end
+    if winnr ~= call('winnr', {}) then prev_winid = vim.fn.win_getid() end
 
     -- move to the tree's win
     cmd(string.format('%dwincmd w', winnr))
     if etc.split == 'no' or etc.split == 'tab' then
-        if etc.prev_bufnr ~= nil and call('bufexists', etc.prev_bufnr) and etc.prev_bufnr ~=
-            call('bufnr', '%') then
+        if etc.prev_bufnr ~= nil and call('bufexists', etc.prev_bufnr) and
+            etc.prev_bufnr ~= call('bufnr', '%') then
             cmd(string.format(string.format('buffer %d', etc.prev_bufnr)))
         else
             cmd('enew')
@@ -596,9 +594,7 @@ function M.print_message(str)
 end
 
 function M.run_commands_batch(args)
-  for i = 1, #args do
-    a.nvim_command(args[i])
-  end
+    for i = 1, #args do a.nvim_command(args[i]) end
 end
 
 function M.hl_lines(bufnr, icon_ns_id, args)
